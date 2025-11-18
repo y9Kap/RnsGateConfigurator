@@ -1,0 +1,392 @@
+/* Reset and base */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  color: #0f172a; /* slate-900 */
+  background: #f8fafc; /* slate-50 */
+}
+
+/* Shell layout */
+.app-shell {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 260px;
+  background: #0b1220; /* dark slate */
+  color: #e2e8f0; /* slate-200 */
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #0f1a33;
+}
+
+.logo {
+  padding: 18px 16px;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+  border-bottom: 1px solid #0f1a33;
+}
+
+.menu {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.menu-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.menu-item:hover {
+  background: #121a2c; /* hover */
+}
+
+.menu-item.active {
+  background: #1e293b; /* slate-800 */
+  color: #f8fafc;
+}
+
+/* Content */
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  /* Исключаем прокрутку всей страницы, скроллим только тело контента */
+  overflow: hidden;
+}
+
+.content-header {
+  padding: 18px 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  /* Чтобы топ-бар не дёргался при изменении ширины правой части */
+  justify-content: flex-start;
+  gap: 12px;
+  position: relative; /* для центрирования сообщения */
+}
+
+.content-header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  /* Выталкиваем остальные элементы вправо, сохраняя стабильный лэйаут */
+  flex: 1 1 auto;
+}
+
+.content-body {
+  padding: 20px;
+  line-height: 1.6;
+  color: #334155; /* slate-700 */
+  /* Заполняем оставшееся место и скроллим внутри, чтобы не дёргалась страница */
+  flex: 1 1 auto;
+  overflow: auto;
+  /* Резервируем место под полосу прокрутки, чтобы не было скачков ширины */
+  scrollbar-gutter: stable both-edges;
+  /* Плавное переключение между разделами */
+  transition: opacity 0.18s ease;
+}
+
+.content-body.switching {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-body { transition: none; }
+}
+
+/* Network status badge */
+.status {
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  /* Делаем постоянную толщину за счёт прозрачной рамки,
+     чтобы при появлении статуса не менялась высота хедера */
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  /* Минимальная высота бэйджа для стабильного лэйаута */
+  min-height: 26px;
+  /* Резервируем немного ширины под иконку/краткий текст, чтобы не было скачка */
+  min-width: 32px;
+  /* Ограничиваем ширину текста ошибок, чтобы не ломать лэйаут */
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: transparent;
+  color: transparent;
+}
+
+/* Иконка-индикатор состояния (точка) — показываем только при известных состояниях */
+.status.ok::before,
+.status.offline::before,
+.status.error::before,
+.status.busy::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.status.ok,
+.status.offline,
+.status.busy,
+.status.error {
+  /* Визуально консистентно кнопкам: белый фон, серый бордер, радиус 8px */
+  background: #ffffff;
+  color: transparent;
+  border: 1px solid #cbd5e1; /* как у .btn */
+  border-radius: 8px; /* как у .btn */
+  /* Квадратная иконка/кнопка фиксированного размера, чтобы не дёргаться */
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status.ok::before { background: #16a34a; /* green-600 */ }
+
+.status.offline::before { background: #ff0000; /* orange-500 */ }
+
+/* Квадратный индикатор внутри квадратного бейджа и без отступов справа */
+.status.ok::before,
+.status.offline::before,
+.status.busy::before,
+.status.error::before {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px; /* квадрат с лёгким скруглением */
+  margin-right: 0; /* центрируем символ внутри квадрата */
+}
+
+/* Онлайн-индикатор внутри квадратного бейджа — именно круглый */
+.status.ok::before {
+  border-radius: 999px;
+}
+
+.status.busy::before {
+  border-radius: 999px;
+}
+
+.status.error::before { background: #ef4444; /* red-500 */ }
+
+/* Busy (in-flight network activity): yellow */
+.status.busy::before { background: #f59e0b; /* amber-500 */ }
+
+/* Центрированное текстовое сообщение в топ-баре */
+.top-message {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  max-width: 60%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  color: #334155; /* slate-700 */
+  pointer-events: none; /* чтобы не мешать кликам по кнопкам */
+}
+
+.top-message.ok { color: #166534; /* green-800 */ }
+.top-message.error { color: #991b1b; /* red-800 */ }
+
+/* Code preview for raw data */
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  background: #0b1220;
+  color: #e2e8f0;
+  border: 1px solid #0f1a33;
+  border-radius: 8px;
+  padding: 12px;
+  overflow: auto;
+}
+
+/* Forms */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.form-title {
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: #0f172a;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 200px minmax(160px, 1fr);
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.form-grid label {
+  color: #475569; /* slate-600 */
+}
+
+/* Индикатор «текущее значение устройства» рядом с подписью поля */
+.form-grid label .field-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  border-radius: 999px;
+  background: #ecfdf5; /* green-50 */
+  color: #166534; /* green-800 */
+  border: 1px solid #86efac; /* green-300 */
+}
+
+.form-grid input,
+.form-grid select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1; /* slate-300 */
+  background: #fff;
+  color: #0f172a;
+}
+
+/* Контейнер для поля с кнопкой (например, показать/скрыть пароль) */
+.input-with-action {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.input-with-action > input {
+  flex: 1 1 auto;
+  width: auto; /* переопределяем общий стиль width:100% */
+}
+
+.input-with-action > .btn {
+  white-space: nowrap;
+  height: auto;
+}
+
+/* Поле с иконкой внутри (например, глазик для пароля) */
+.input-with-icon {
+  position: relative;
+  width: 100%;
+}
+
+.input-with-icon > input {
+  width: 100%;
+  padding-right: 38px; /* место под иконку */
+}
+
+.icon-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b; /* slate-500 */
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.icon-btn:hover { color: #0f172a; background: #f1f5f9; }
+.icon-btn:focus { outline: 2px solid #94a3b8; outline-offset: 2px; }
+.icon-btn.active { color: #0f172a; }
+
+.icon-btn .icon {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  display: block;
+}
+
+.form-grid input:disabled {
+  background: #f1f5f9; /* slate-100 */
+  color: #64748b; /* slate-500 */
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid #cbd5e1; /* slate-300 */
+  background: #ffffff;
+  color: #0f172a;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: #1e293b; /* slate-800 */
+  color: #f8fafc;
+  border-color: #1e293b;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.hint {
+  font-size: 12px;
+  margin-left: 8px;
+  color: #475569; /* slate-600 */
+}
+
+.hint.error { color: #b91c1c; } /* red-700 */
+.hint.success { color: #166534; } /* green-800 */
+.hint.warn { color: #7c2d12; } /* orange-900 */
+
+/* Small screens */
+@media (max-width: 720px) {
+  .sidebar { width: 200px; }
+  .content-header h1 { font-size: 16px; }
+  .form-grid { grid-template-columns: 1fr; }
+}

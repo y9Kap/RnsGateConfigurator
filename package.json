@@ -1,0 +1,21 @@
+{
+  "name": "rns-gate_configurator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --minify --sourcemap --outfile=dist/bundle.js --platform=browser",
+    "copy:static": "cp index.html dist/index.html && cp styles.css dist/styles.css",
+    "copy:server": "rm -rf /home/y9kap/IdeaProjects/rnsGateServer/dist && cp -r dist /home/y9kap/IdeaProjects/rnsGateServer/",
+    "build:all": "npm run build && npm run copy:static && npm run copy:server"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0",
+    "typescript": "^5.9.3"
+  },
+  "private": true,
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
