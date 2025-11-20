@@ -45,6 +45,12 @@
 - copy:server — копирование dist в локальный серверный проект (путь по умолчанию: /home/y9kap/IdeaProjects/rnsGateServer/ — измените при необходимости).
 - build:all — build → copy:static → copy:server.
 
+## Релизы с готовым dist
+Начиная с этой версии, GitHub Actions автоматически собирает проект при публикации релиза и прикрепляет архив dist.zip в раздел Releases. Чтобы запустить локально без сборки:
+- скачайте dist.zip из последнего релиза;
+- распакуйте архив;
+- откройте файл dist/index.html напрямую в браузере (file://) или отдайте папку dist как статику на любом веб‑сервере.
+
 ## Настройки и локальное хранение
 - Переключатель режима автозаполнения: localStorage key autofillMode (hints|fill).
 - Профили форм: profile_wifi и profile_ethernet.
