@@ -11,3 +11,6 @@ package-lock.json
 /dist
 /.idea
 .vscode/*
+
+# OS-generated files
+.DS_Store
