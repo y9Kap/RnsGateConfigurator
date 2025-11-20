@@ -2,8 +2,11 @@ name: Release dist archive
 
 on:
   push:
+    branches:
+      - '**' # запускать сборку на любом пуше в ветку
     tags:
-      - 'v*'
+      - 'v*' # релиз создаётся только при пуше тега, см. условие ниже
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -15,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # нужен доступ к коммиту github.event.before для корректного сравнения версий при push нескольких коммитов
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,14 +36,36 @@ jobs:
       - name: Copy static files
         run: npm run copy:static
 
+      - name: Check if version changed
+        id: version_check
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          OLD_VERSION=""
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              OLD_VERSION=$(git show "$BEFORE":package.json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).version||'')}catch{console.log('')}})")
+            fi
+          fi
+          echo "old=$OLD_VERSION new=$NEW_VERSION"
+          if [ "$NEW_VERSION" != "$OLD_VERSION" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Archive dist
         run: zip -r dist.zip dist
 
       - name: Create or update GitHub Release and upload asset
+        if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || steps.version_check.outputs.changed == 'true')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.version_check.outputs.version) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.version_check.outputs.version) }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: dist.zip
         env:
