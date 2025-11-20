@@ -1,11 +1,12 @@
 {
   "name": "rns-gate_configurator",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "",
   "main": "dist/index.js",
   "scripts": {
     "build": "esbuild src/index.ts --bundle --minify --sourcemap --outfile=dist/bundle.js --platform=browser",
-    "copy:static": "cp index.html dist/index.html && cp styles.css dist/styles.css"
+    "copy:static": "cp index.html dist/index.html && cp styles.css dist/styles.css",
+    "build:all": "npm run build && npm run copy:static"
   },
   "devDependencies": {
     "esbuild": "^0.27.0",
