@@ -117,19 +117,20 @@ body {
 .status {
   font-size: 12px;
   line-height: 1;
-  padding: 6px 8px;
-  border-radius: 6px;
-  /* Делаем постоянную толщину за счёт прозрачной рамки,
-     чтобы при появлении статуса не менялась высота хедера */
+  /* Фиксируем геометрию индикатора в любом состоянии (включая дефолтное),
+     чтобы при смене классов .ok/.busy/.error не было сдвига лэйаута */
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  /* Постоянная толщина рамки (в дефолте — прозрачная) */
   border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   white-space: nowrap;
-  /* Минимальная высота бэйджа для стабильного лэйаута */
-  min-height: 26px;
-  /* Резервируем немного ширины под иконку/краткий текст, чтобы не было скачка */
-  min-width: 32px;
-  /* Ограничиваем ширину текста ошибок, чтобы не ломать лэйаут */
+  /* Ограничение на случай появления текста, но обычно текста нет */
   max-width: 42ch;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -244,8 +245,19 @@ body {
 
 .form-title {
   font-weight: 600;
+  font-size: 16px; /* фиксируем размер, чтобы теги не влияли на типографику */
+  line-height: 1.25;
   margin: 0 0 12px 0;
   color: #0f172a;
+}
+
+/* Подзаголовки внутри секций (главы/подглавы) */
+.form-subtitle {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+  margin: 10px 0 6px 0;
+  color: #334155; /* slate-700 */
 }
 
 .form-grid {
@@ -276,6 +288,94 @@ body {
 
 .form-grid input,
 .form-grid select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1; /* slate-300 */
+  background: #fff;
+  color: #0f172a;
+}
+
+/* Центровка подзаголовка в отдельной строке */
+.subtitle-center {
+  text-align: center;
+}
+
+/* Выравнивание лейблов поля по правому краю — ближе к input */
+.label-right {
+  text-align: center;
+  padding-right: 30px;
+}
+
+/* Одна строка с парой полей Chip/Pin (4 ячейки: label, input, label, input) */
+.pair-inline {
+  display: grid;
+  grid-template-columns: auto minmax(140px, 1fr) auto minmax(140px, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+}
+
+/* Небольшой отступ слева для элементов (лейблы и поля) в гриде форм */
+.indent-left {
+  margin-left: 8px;
+}
+
+/* Дополнительный вертикальный отступ после строки SPI устройства */
+.after-spi-gap {
+  margin-bottom: 10px;
+}
+
+/* Левая колонка-метка для групп GPIO (IRQ/Busy/NRST/...) */
+.center-label {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155; /* slate-700 */
+}
+
+/* Внутренний грид для пары полей Chip/Pin */
+.pair-grid {
+  display: grid;
+  grid-template-columns: 90px minmax(120px, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+}
+
+/* Пара порт/пин в одной строке */
+.pair-inputs {
+  display: flex;
+  gap: 8px;
+}
+.pair-inputs > input,
+.pair-inputs > select {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Табличная раскладка для GPIO: столбцы Chip/Pin, строки IRQ/Busy/NRST/... */
+.gpio-table {
+  display: grid;
+  grid-template-columns: 120px minmax(160px, 1fr) minmax(160px, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.gpio-table .gpio-header {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: #475569; /* slate-600 */
+  text-align: center;
+}
+
+.gpio-table .gpio-row-title {
+  text-align: center;
+  font-weight: 500; /* обычное начертание: не жирное */
+  font-size: 13px; /* чуть меньше базового */
+  color: #334155; /* slate-700 */
+}
+
+.gpio-table input,
+.gpio-table select {
   width: 100%;
   padding: 8px 10px;
   border-radius: 8px;
@@ -347,6 +447,67 @@ body {
   color: #64748b; /* slate-500 */
 }
 
+/* «Лесенка» для иерархии внутри SPI (и не только) */
+.ladder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ladder .level-1 {
+  position: relative;
+  padding-left: 10px;
+  border-left: 2px solid #e2e8f0; /* светлая направляющая */
+}
+
+.ladder .level-2 {
+  position: relative;
+  margin-top: 2px;
+  padding-left: 16px;
+  border-left: 2px dashed #e2e8f0; /* подуровень */
+}
+
+/* Вложенные гриды слегка отделяем от подзаголовков */
+.ladder .form-grid {
+  margin: 6px 0 2px 0;
+}
+
+/* Визуальные маркеры у подзаголовков внутри лесенки */
+.ladder .level-1 > .form-subtitle,
+.ladder .level-2 > .form-subtitle {
+  position: relative;
+}
+
+.ladder .level-1 > .form-subtitle::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background: #94a3b8; /* slate-400 */
+  border-radius: 999px;
+}
+
+.ladder .level-2 > .form-subtitle {
+  font-weight: 500;
+  font-size: 12.5px;
+  color: #475569; /* slate-600 */
+}
+
+.ladder .level-2 > .form-subtitle::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  background: #cbd5e1; /* slate-300 */
+  border-radius: 999px;
+}
+
 .form-actions {
   display: flex;
   gap: 10px;
@@ -361,6 +522,12 @@ body {
   padding: 8px 12px;
   border-radius: 8px;
   cursor: pointer;
+  /* Исключаем перенос длинных надписей (например, «Заполнить актуальные данные»),
+     чтобы высота и ширина кнопки не менялись при клике/disabled */
+  white-space: nowrap;
+  /* Стабильное вертикальное выравнивание текста без скачков */
+  display: inline-flex;
+  align-items: center;
 }
 
 .btn.primary {
@@ -389,4 +556,12 @@ body {
   .sidebar { width: 200px; }
   .content-header h1 { font-size: 16px; }
   .form-grid { grid-template-columns: 1fr; }
+  /* На узких экранах уменьшаем отступы лесенки */
+  .ladder .level-1 { padding-left: 8px; }
+  .ladder .level-2 { padding-left: 12px; }
+  /* Стекуем Chip/Pin под мобильные ширины */
+  .pair-grid { grid-template-columns: 1fr; }
+  .center-label { text-align: left; }
+  .pair-inline { grid-template-columns: 1fr; }
+  .gpio-table { grid-template-columns: 1fr; }
 }

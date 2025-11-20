@@ -64,9 +64,8 @@ type Section = {
 };
 
 const sections: Section[] = [
-  { id: 'rnsd', title: 'RNSd' },
+  { id: 'rnsd', title: 'RNSD' },
   { id: 'freedv', title: 'FreeDV' },
-  { id: 'loraspi', title: 'LoraSPI' },
   { id: 'wifi', title: 'WiFi' },
   { id: 'ethernet', title: 'Ethernet' },
 ];
@@ -127,17 +126,20 @@ function initUI() {
   fillBtn.addEventListener('click', async () => {
     if (!currentSectionId) return;
     try {
-      // Зафиксируем текущую ширину кнопки, чтобы шапка не дёргалась при смене текста
-      const w = fillBtn.offsetWidth;
-      if (w) fillBtn.style.width = `${w}px`;
+      // Жёстко фиксируем текущие ширину/высоту на время запроса,
+      // чтобы исключить даже субпиксельные скачки при смене :disabled
+      const rect = fillBtn.getBoundingClientRect();
+      if (rect.width && rect.height) {
+        fillBtn.style.width = `${Math.round(rect.width)}px`;
+        fillBtn.style.height = `${Math.round(rect.height)}px`;
+      }
       fillBtn.disabled = true;
-      fillBtn.textContent = 'Обновление...';
       await refreshCurrentSectionData();
     } finally {
       fillBtn.disabled = false;
-      fillBtn.textContent = 'Заполнить актуальные данные';
-      // Снимаем фиксацию ширины
+      // Снимаем фиксацию размеров
       fillBtn.style.width = '';
+      fillBtn.style.height = '';
     }
   });
   header.appendChild(fillBtn);
@@ -193,7 +195,8 @@ function selectSection(id: string) {
     (bodyEl as HTMLElement).style.minHeight = currentH ? `${currentH}px` : '';
     (bodyEl as HTMLElement).classList.add('switching');
     (bodyEl as HTMLElement).scrollTop = 0;
-    bodyEl.textContent = `Раздел «${section.title}». Загрузка данных...`;
+    // Не показываем лишнее служебное сообщение в теле раздела, чтобы не дёргался контент
+    // Оставляем предыдущий контент до прихода новых данных, индикатор показывается в статус-баре
   }
   currentSectionId = id;
   updateStatusBar();
@@ -221,11 +224,15 @@ async function loadSectionData(id: string) {
     setStatus('busy', '');
     const data = await API.get(`/${id}/info`);
     if (bodyEl) {
-      // Специализированные формы для WiFi/Ethernet, остальные — сырые данные
+      // Специализированные формы для WiFi/Ethernet/FreeDV, остальные — сырые данные
       if (id === 'wifi') {
         renderWifiForm(parseInfoForSection(id, data) as any);
       } else if (id === 'ethernet') {
         renderEthernetForm(parseInfoForSection(id, data) as any);
+      } else if (id === 'freedv') {
+        renderFreeDVForm(parseInfoForSection(id, data) as any);
+      } else if (id === 'rnsd') {
+        renderRnsdConfig(data);
       } else {
         const pre = document.createElement('pre');
         pre.className = 'code';
@@ -249,6 +256,16 @@ async function loadSectionData(id: string) {
       if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
       else setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
       return;
+    } else if (id === 'freedv') {
+      if (bodyEl) renderFreeDVForm(undefined);
+      if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
+      else setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
+      return;
+    } else if (id === 'rnsd') {
+      if (bodyEl) renderRnsdConfig(undefined);
+      if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
+      else setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
+      return;
     } else {
       if (isOffline()) {
         setStatus('offline', 'Оффлайн режим: CGI недоступны');
@@ -267,7 +284,7 @@ function updateStatusBar() {
 
 // --- Искуственная задержка переключения цветов индикатора ---
 type StatusKind = '' | 'ok' | 'offline' | 'error' | 'busy';
-const STATUS_COLOR_MIN_INTERVAL = 600; // мс между сменами цвета
+const STATUS_COLOR_MIN_INTERVAL = 500; // мс между сменами цвета
 let lastIndicatorSwitch = 0; // момент последнего применения класса
 let indicatorTimer: number | null = null; // таймер отложенного применения
 let indicatorPending: { kind: StatusKind; text: string } | null = null; // последняя запрошенная
@@ -371,6 +388,15 @@ type EthernetInfo = {
   dns2?: string;
 };
 
+// ----- FreeDV -----
+type FreeDVInfo = {
+  mode?: 'FSK2' | 'FSK4' | string;
+  rate?: string | number; // 500, 200, 100, 50, 20
+  ldpc?: '768/256' | '512/256' | string;
+};
+
+// Секция LoraSPI удалена — связанные типы и поля больше не используются
+
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Element #${id} not found`);
@@ -438,6 +464,11 @@ function clearCurrentFormFields() {
   }
   if (currentSectionId === 'ethernet') {
     ['eth-ip', 'eth-mask', 'eth-gw', 'eth-dns1', 'eth-dns2']
+      .forEach(clear);
+    return;
+  }
+  if (currentSectionId === 'freedv') {
+    ['freedv-mode', 'freedv-rate', 'freedv-ldpc']
       .forEach(clear);
     return;
   }
@@ -536,7 +567,7 @@ function createInfoSection(title: string, info?: Record<string, any>): HTMLEleme
 function parseInfoForSection(
   id: string,
   data: unknown,
-): Partial<WifiInfo> | Partial<EthernetInfo> | undefined {
+): Partial<WifiInfo> | Partial<EthernetInfo> | Partial<FreeDVInfo> | undefined {
   // 1) Уже объект — используем как есть
   let obj: any = (data && typeof data === 'object') ? data : undefined;
   // 2) Попытаться распарсить строку
@@ -595,6 +626,12 @@ function parseInfoForSection(
     if ('dns1' in norm) out.dns1 = toStr(norm.dns1);
     if ('dns2' in norm) out.dns2 = toStr(norm.dns2);
     return out;
+  } else if (id === 'freedv') {
+    const out: Partial<FreeDVInfo> = {};
+    if ('mode' in norm) out.mode = String(norm.mode).toUpperCase() as any;
+    if ('rate' in norm) out.rate = toStr(norm.rate);
+    if ('ldpc' in norm) out.ldpc = toStr(norm.ldpc);
+    return out;
   }
   return undefined;
 }
@@ -635,6 +672,358 @@ function parseKeyValueString(src: string): Record<string, string> {
   return out;
 }
 
+// --- RNSD: просмотр текущей конфигурации ---
+function unwrapDataPayload(input: unknown): unknown {
+  // Разворачиваем возможный конверт { data, ... } или { config } / { content }
+  if (input && typeof input === 'object') {
+    const obj: any = input as any;
+    if (Object.prototype.hasOwnProperty.call(obj, 'data')) return obj.data;
+    if (Object.prototype.hasOwnProperty.call(obj, 'config')) return obj.config;
+    if (Object.prototype.hasOwnProperty.call(obj, 'content')) return obj.content;
+  }
+  return input;
+}
+
+function renderRnsdConfig(data: unknown | undefined) {
+  const bodyEl = document.getElementById('content-body');
+  if (!bodyEl) return;
+  bodyEl.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'form';
+
+  // Вспомогательная функция: попытаться структурировать вход на RNSD и SPI
+  const splitPayload = (input: unknown): { raw: unknown; rnsd: any; spi: any } => {
+    const raw = unwrapDataPayload(input);
+    let obj: any | undefined;
+    // Нормализуем в объект, если возможно
+    if (raw && typeof raw === 'object') {
+      obj = raw as any;
+    } else if (typeof raw === 'string') {
+      const s = raw.trim();
+      // Попробовать JSON
+      try {
+        const j = JSON.parse(s);
+        if (j && typeof j === 'object') obj = j;
+      } catch {}
+      // Попробовать key=value
+      if (!obj && s) obj = parseKeyValueString(s);
+    }
+
+    // Если объект не получился — вернём как есть в RNSD
+    if (!obj || typeof obj !== 'object') {
+      return { raw, rnsd: raw, spi: undefined };
+    }
+
+    const isSpiKey = (k: string) => {
+      const kk = String(k).toLowerCase();
+      // Эвристика: любые ключи, содержащие 'spi', а также распространённые поля шин
+      if (kk.includes('spi')) return true;
+      // Типичные GPIO/контрольные линии для радиомодемов
+      if (kk.startsWith('gpio')) return true; // gpio_irq_port, gpio_busy_pin, gpio_tx_en_*
+      if (kk.includes('irq') || kk.includes('busy') || kk.includes('nrst') || kk.includes('reset') || kk.includes('tx_en') || kk.includes('rx_en') || kk.includes('txen') || kk.includes('rxen')) return true;
+      const known = ['miso', 'mosi', 'sck', 'clk', 'cs', 'chipselect', 'baud', 'speed', 'mode'];
+      // если ключ оформлен как spi_* он уже пойман, иначе проверим составные вида spi.mode (уже поймано),
+      // здесь поддержим случаи когда секция может быть вынесена в под-объект obj.spi
+      return known.includes(kk) || kk.startsWith('spi.');
+    };
+
+    // Если внутри есть под-объект spi — берём его целиком
+    let spi: any = undefined;
+    if (Object.prototype.hasOwnProperty.call(obj, 'spi')) {
+      const v = (obj as any).spi;
+      if (v && typeof v === 'object') spi = v; else spi = v;
+    }
+
+    // Остальное распределим по эвристике
+    const rnsd: Record<string, any> = {};
+    const extraSpi: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (k === 'spi') continue;
+      if (isSpiKey(k)) extraSpi[k] = v; else rnsd[k] = v;
+    }
+    // Объединить spi из поля и собранные по ключам
+    if (spi && typeof spi === 'object' && Object.keys(extraSpi).length > 0) {
+      spi = { ...spi, ...extraSpi };
+    } else if (!spi && Object.keys(extraSpi).length > 0) {
+      spi = extraSpi;
+    }
+
+    return { raw, rnsd, spi };
+  };
+
+  const parts = splitPayload(data);
+
+  // Секция RNSD
+  const rnsdBox = document.createElement('section');
+  rnsdBox.className = 'form-section';
+  const rnsdTitle = document.createElement('div');
+  rnsdTitle.className = 'form-title';
+  rnsdTitle.textContent = 'RNSD';
+  rnsdBox.appendChild(rnsdTitle);
+  const rnsdPre = document.createElement('pre');
+  rnsdPre.className = 'code';
+  if (parts.rnsd === undefined || parts.rnsd === null || (typeof parts.rnsd === 'object' && Object.keys(parts.rnsd).length === 0)) {
+    // Если не удалось выделить RNSD и есть «сырой» контент строкой — покажем его здесь
+    if (typeof parts.raw === 'string') rnsdPre.textContent = String(parts.raw);
+    else if (parts.raw && typeof parts.raw === 'object') {
+      try { rnsdPre.textContent = JSON.stringify(parts.raw, null, 2); } catch { rnsdPre.textContent = String(parts.raw); }
+    } else {
+      rnsdPre.textContent = 'Нет данных о RNSD.';
+    }
+  } else if (typeof parts.rnsd === 'string') {
+    rnsdPre.textContent = parts.rnsd;
+  } else if (typeof parts.rnsd === 'object') {
+    try { rnsdPre.textContent = JSON.stringify(parts.rnsd, null, 2); } catch { rnsdPre.textContent = String(parts.rnsd); }
+  } else {
+    rnsdPre.textContent = String(parts.rnsd);
+  }
+  rnsdBox.appendChild(rnsdPre);
+
+  // Секция SPI
+  const spiBox = document.createElement('section');
+  spiBox.className = 'form-section';
+  const spiTitle = document.createElement('div');
+  spiTitle.className = 'form-title';
+  spiTitle.textContent = 'SPI';
+  spiBox.appendChild(spiTitle);
+  // Форма настроек SPI/GPIO: переход на libgpiod и dev-путь SPI
+  const getStr = (v: any): string | undefined => {
+    if (v === null || v === undefined) return undefined;
+    if (typeof v === 'string') {
+      const s = v.trim();
+      return s ? s : undefined;
+    }
+    if (typeof v === 'number') {
+      return Number.isFinite(v) ? String(Math.trunc(v)) : undefined;
+    }
+    return undefined;
+  };
+  // Поддержим разные варианты структуры из бэкенда
+  const spiSrc: any = parts.spi && typeof parts.spi === 'object' ? parts.spi : {};
+
+  const buildSpiDevice = (): string | undefined => {
+    let dev = getStr(spiSrc.spi_device ?? spiSrc.device ?? spiSrc.dev ?? spiSrc.path ?? spiSrc.spi?.device ?? spiSrc.spi?.dev);
+    if (!dev) {
+      const portStr = getStr(spiSrc.spi_port ?? spiSrc.port ?? spiSrc.spi?.port);
+      const csStr = getStr(spiSrc.spi_cs ?? spiSrc.cs ?? spiSrc.chipselect ?? spiSrc.spi?.cs);
+      if (portStr !== undefined && csStr !== undefined) {
+        const p = String(portStr).replace(/\D+/g, '');
+        const c = String(csStr).replace(/\D+/g, '');
+        if (p !== '' && c !== '') dev = `/dev/spi${p}.${c}`;
+      }
+    }
+    if (dev) {
+      // нормализуем варианты spi0.0 без префикса
+      const m = /^(?:\/dev\/)?(spi\d+\.\d+)$/.exec(dev);
+      if (m) dev = `/dev/${m[1]}`;
+    }
+    return dev;
+  };
+
+  const normChip = (v: any): string | undefined => {
+    let s = getStr(v);
+    if (!s) return undefined;
+    s = s.trim();
+    // если пришло просто число — считаем, что это индекс gpiochipN
+    if (/^\d+$/.test(s)) return `gpiochip${s}`;
+    // если пришло /dev/gpiochipN — допустим, но приведём к gpiochipN
+    const m = /^(?:\/dev\/)?(gpiochip\d+)$/.exec(s);
+    if (m) return m[1];
+    return s;
+  };
+  const normPin = (v: any): string | undefined => {
+    const s = getStr(v);
+    return s;
+  };
+
+  const initialSpi = {
+    spi_device: buildSpiDevice(),
+    // Новые поля для таблицы SPI: Chip и Pin
+    spi_chip: (() => {
+      const dev = buildSpiDevice();
+      if (dev) {
+        const m = /^\/dev\/(spi\d+)\.(\d+)$/.exec(dev);
+        if (m) return m[1];
+      }
+      const portStr = getStr(spiSrc.spi_port ?? spiSrc.port ?? spiSrc.spi?.port);
+      if (portStr !== undefined) {
+        const p = String(portStr).replace(/\D+/g, '');
+        if (p !== '') return `spi${p}`;
+      }
+      return undefined;
+    })(),
+    spi_pin: (() => {
+      const dev = buildSpiDevice();
+      if (dev) {
+        const m = /^\/dev\/(spi\d+)\.(\d+)$/.exec(dev);
+        if (m) return m[2];
+      }
+      const csStr = getStr(spiSrc.spi_cs ?? spiSrc.cs ?? spiSrc.chipselect ?? spiSrc.spi?.cs);
+      if (csStr !== undefined) {
+        const c = String(csStr).replace(/\D+/g, '');
+        if (c !== '') return c;
+      }
+      return undefined;
+    })(),
+    gpio_irq_chip: normChip(spiSrc.gpio_irq_chip ?? spiSrc.irq_chip ?? spiSrc.gpio?.irq?.chip ?? spiSrc.gpio_irq_port ?? spiSrc.irq_port ?? spiSrc.gpio?.irq?.port),
+    gpio_irq_pin: normPin(spiSrc.gpio_irq_pin ?? spiSrc.irq_pin ?? spiSrc.gpio?.irq?.pin),
+    gpio_busy_chip: normChip(spiSrc.gpio_busy_chip ?? spiSrc.busy_chip ?? spiSrc.gpio?.busy?.chip ?? spiSrc.gpio_busy_port ?? spiSrc.busy_port ?? spiSrc.gpio?.busy?.port),
+    gpio_busy_pin: normPin(spiSrc.gpio_busy_pin ?? spiSrc.busy_pin ?? spiSrc.gpio?.busy?.pin),
+    gpio_nrst_chip: normChip(spiSrc.gpio_nrst_chip ?? spiSrc.nrst_chip ?? spiSrc.reset_chip ?? spiSrc.gpio?.nrst?.chip ?? spiSrc.gpio?.reset?.chip ?? spiSrc.gpio_nrst_port ?? spiSrc.nrst_port ?? spiSrc.gpio?.nrst?.port ?? spiSrc.gpio?.reset?.port),
+    gpio_nrst_pin: normPin(spiSrc.gpio_nrst_pin ?? spiSrc.nrst_pin ?? spiSrc.reset_pin ?? spiSrc.gpio?.nrst?.pin ?? spiSrc.gpio?.reset?.pin),
+    gpio_tx_en_chip: normChip(spiSrc.gpio_tx_en_chip ?? spiSrc.tx_en_chip ?? spiSrc.gpio?.tx_en?.chip ?? spiSrc.gpio?.txen?.chip ?? spiSrc.gpio_tx_en_port ?? spiSrc.tx_en_port ?? spiSrc.gpio?.tx_en?.port ?? spiSrc.gpio?.txen?.port),
+    gpio_tx_en_pin: normPin(spiSrc.gpio_tx_en_pin ?? spiSrc.tx_en_pin ?? spiSrc.gpio?.tx_en?.pin ?? spiSrc.gpio?.txen?.pin),
+    gpio_rx_en_chip: normChip(spiSrc.gpio_rx_en_chip ?? spiSrc.rx_en_chip ?? spiSrc.gpio?.rx_en?.chip ?? spiSrc.gpio?.rxen?.chip ?? spiSrc.gpio_rx_en_port ?? spiSrc.rx_en_port ?? spiSrc.gpio?.rx_en?.port ?? spiSrc.gpio?.rxen?.port),
+    gpio_rx_en_pin: normPin(spiSrc.gpio_rx_en_pin ?? spiSrc.rx_en_pin ?? spiSrc.gpio?.rx_en?.pin ?? spiSrc.gpio?.rxen?.pin),
+  } as Record<string, string | undefined>;
+
+  const grid = document.createElement('div');
+  grid.className = 'form-grid';
+  grid.innerHTML = `
+    <div class="gpio-table indent-left" style="grid-column: 1 / -1;">
+      <div class="gpio-header"></div>
+      <div class="gpio-header">Chip</div>
+      <div class="gpio-header">Pin</div>
+
+      <div class="gpio-row-title">SPI</div>
+      <input id="spi-chip" type="text" inputmode="text" placeholder="spi0">
+      <input id="spi-pin" type="text" inputmode="numeric" placeholder="0">
+
+      <div class="gpio-row-title">IRQ</div>
+      <input id="gpio-irq-chip" type="text" inputmode="text" placeholder="gpiochip1">
+      <input id="gpio-irq-pin" type="text" inputmode="text" placeholder="номер или имя">
+
+      <div class="gpio-row-title">Busy</div>
+      <input id="gpio-busy-chip" type="text" inputmode="text" placeholder="gpiochip1">
+      <input id="gpio-busy-pin" type="text" inputmode="text" placeholder="номер или имя">
+
+      <div class="gpio-row-title">NRST</div>
+      <input id="gpio-nrst-chip" type="text" inputmode="text" placeholder="gpiochip1">
+      <input id="gpio-nrst-pin" type="text" inputmode="text" placeholder="номер или имя">
+
+      <div class="gpio-row-title">TX EN</div>
+      <input id="gpio-tx-en-chip" type="text" inputmode="text" placeholder="gpiochip1">
+      <input id="gpio-tx-en-pin" type="text" inputmode="text" placeholder="номер или имя">
+
+      <div class="gpio-row-title">RX EN</div>
+      <input id="gpio-rx-en-chip" type="text" inputmode="text" placeholder="gpiochip1">
+      <input id="gpio-rx-en-pin" type="text" inputmode="text" placeholder="номер или имя">
+    </div>
+  `;
+  spiBox.appendChild(grid);
+
+  // Кнопка «Сохранить» для SPI удалена: сохранение будет общим для RNSD и SPI
+
+  // Важно: добавим секции в DOM до поиска элементов по id,
+  // чтобы document.getElementById корректно их находил
+  wrap.appendChild(rnsdBox);
+  wrap.appendChild(spiBox);
+  bodyEl.appendChild(wrap);
+
+  // Установка начальных значений
+  const setVal = (id: string, v: string | undefined) => {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return;
+    if (v === undefined || v === null) el.value = '';
+    else el.value = String(v);
+  };
+  setVal('spi-chip', initialSpi.spi_chip as any);
+  setVal('spi-pin', initialSpi.spi_pin as any);
+  setVal('gpio-irq-chip', initialSpi.gpio_irq_chip);
+  setVal('gpio-irq-pin', initialSpi.gpio_irq_pin);
+  setVal('gpio-busy-chip', initialSpi.gpio_busy_chip);
+  setVal('gpio-busy-pin', initialSpi.gpio_busy_pin);
+  setVal('gpio-nrst-chip', initialSpi.gpio_nrst_chip);
+  setVal('gpio-nrst-pin', initialSpi.gpio_nrst_pin);
+  setVal('gpio-tx-en-chip', initialSpi.gpio_tx_en_chip);
+  setVal('gpio-tx-en-pin', initialSpi.gpio_tx_en_pin);
+  setVal('gpio-rx-en-chip', initialSpi.gpio_rx_en_chip);
+  setVal('gpio-rx-en-pin', initialSpi.gpio_rx_en_pin);
+
+  // Локальные элементы действий SPI отсутствуют
+
+  type SpiModel = {
+    spi_chip: string; spi_pin: string;
+    gpio_irq_chip: string; gpio_irq_pin: string;
+    gpio_busy_chip: string; gpio_busy_pin: string;
+    gpio_nrst_chip: string; gpio_nrst_pin: string;
+    gpio_tx_en_chip: string; gpio_tx_en_pin: string;
+    gpio_rx_en_chip: string; gpio_rx_en_pin: string;
+  };
+
+  const collect = (): SpiModel | null => {
+    const read = (id: string) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (!el) return undefined as any;
+      const s = (el.value ?? '').trim();
+      return s ? s : undefined;
+    };
+    const v = {
+      spi_chip: read('spi-chip'), spi_pin: read('spi-pin'),
+      gpio_irq_chip: read('gpio-irq-chip'), gpio_irq_pin: read('gpio-irq-pin'),
+      gpio_busy_chip: read('gpio-busy-chip'), gpio_busy_pin: read('gpio-busy-pin'),
+      gpio_nrst_chip: read('gpio-nrst-chip'), gpio_nrst_pin: read('gpio-nrst-pin'),
+      gpio_tx_en_chip: read('gpio-tx-en-chip'), gpio_tx_en_pin: read('gpio-tx-en-pin'),
+      gpio_rx_en_chip: read('gpio-rx-en-chip'), gpio_rx_en_pin: read('gpio-rx-en-pin'),
+    } as Record<string, any>;
+    // Проверим, что все значения заданы
+    const keys = Object.keys(v);
+    for (const k of keys) {
+      if (v[k] === undefined) return null;
+    }
+    return v as SpiModel;
+  };
+
+  const serverBaseline: Partial<SpiModel> | null = (() => {
+    // Если сервер прислал хоть одно поле — считаем baseline заданным
+    const any = Object.values(initialSpi).some((x) => x !== undefined);
+    if (!any) return null;
+    const toStr = (x: any) => (typeof x === 'string' ? x : undefined);
+    return {
+      spi_chip: toStr(initialSpi.spi_chip)!,
+      spi_pin: toStr(initialSpi.spi_pin)!,
+      gpio_irq_chip: toStr(initialSpi.gpio_irq_chip)!, gpio_irq_pin: toStr(initialSpi.gpio_irq_pin)!,
+      gpio_busy_chip: toStr(initialSpi.gpio_busy_chip)!, gpio_busy_pin: toStr(initialSpi.gpio_busy_pin)!,
+      gpio_nrst_chip: toStr(initialSpi.gpio_nrst_chip)!, gpio_nrst_pin: toStr(initialSpi.gpio_nrst_pin)!,
+      gpio_tx_en_chip: toStr(initialSpi.gpio_tx_en_chip)!, gpio_tx_en_pin: toStr(initialSpi.gpio_tx_en_pin)!,
+      gpio_rx_en_chip: toStr(initialSpi.gpio_rx_en_chip)!, gpio_rx_en_pin: toStr(initialSpi.gpio_rx_en_pin)!,
+    } as Partial<SpiModel>;
+  })();
+
+  const isDifferentFromBaseline = (cur: SpiModel | null): boolean => {
+    if (!cur) return false; // не все заполнено — пока не сохраняем
+    if (!serverBaseline) return true;
+    const keys = Object.keys(cur) as (keyof SpiModel)[];
+    return keys.some((k) => (serverBaseline as any)[k] === undefined || (serverBaseline as any)[k] !== (cur as any)[k]);
+  };
+
+  const validate = (cur: SpiModel | null): string | null => {
+    if (!cur) return 'Заполните все поля';
+    // SPI: chip "spiN" и pin — номер
+    if (!/^spi\d+$/.test(cur.spi_chip)) return 'SPI Chip должен быть вида spiN (например spi0)';
+    if (!/^\d+$/.test(cur.spi_pin)) return 'SPI Pin (CS) должен быть числом (например 0)';
+    const chipFields: (keyof SpiModel)[] = ['gpio_irq_chip','gpio_busy_chip','gpio_nrst_chip','gpio_tx_en_chip','gpio_rx_en_chip'];
+    for (const cf of chipFields) {
+      const v = cur[cf] as string;
+      if (!/^(?:\/dev\/)?gpiochip\d+$/.test(v) && !/^gpiochip\d+$/.test(v)) {
+        return 'Имя GPIO чипа должно быть вида gpiochipN (например gpiochip1)';
+      }
+    }
+    // Пины могут быть номером или именем — требуем непустые значения
+    const pinFields: (keyof SpiModel)[] = ['gpio_irq_pin','gpio_busy_pin','gpio_nrst_pin','gpio_tx_en_pin','gpio_rx_en_pin'];
+    for (const pf of pinFields) {
+      if (!cur[pf] || String(cur[pf]).trim() === '') return 'Укажите номер или имя GPIO пина';
+    }
+    return null;
+  };
+
+  // Доступность сохранения будет обрабатываться общей кнопкой (вне секции SPI)
+  const updateSaveAvailability = () => {};
+
+  // Сохранение обрабатывается общей кнопкой (не здесь)
+}
+
 function normalizeKeys(input: Record<string, any>): Record<string, any> {
   const out: Record<string, any> = {};
   const map: Record<string, string> = {
@@ -658,6 +1047,10 @@ function normalizeKeys(input: Record<string, any>): Record<string, any> {
     'password': 'password',
     'psk': 'password',
     'key': 'password',
+    // FreeDV
+    'freedv_mode': 'mode',
+    'freedv_rate': 'rate',
+    'freedv_ldpc': 'ldpc',
   };
   for (const [k, v] of Object.entries(input)) {
     const kk = k.trim().toLowerCase();
@@ -839,7 +1232,10 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
   // Базовое состояние «как на сервере» для сравнения (дифф)
   // Если данные пришли с сервера, используем их как baseline
   // Если сервер недоступен и пришли дефолты, считаем, что baseline отсутствует
-  const serverBaseline: WifiInfo | null = info ? {
+  // Считаем, что на сервере есть данные, только если пришло хотя бы одно поле из набора.
+  const wifiKeys = ['mode','ssid','password','ip_config','ip','netmask','gateway','dns1','dns2'] as const;
+  const hasWifiServerData = !!info && wifiKeys.some((k) => (info as any)[k] !== undefined && String((info as any)[k] ?? '') !== '');
+  const serverBaseline: WifiInfo | null = hasWifiServerData ? {
     mode: initial.mode,
     ssid: initial.ssid,
     password: initial.password, // если сервер вернул пусто, сравнение пароля будет учитывать только непустые изменения
@@ -1113,7 +1509,11 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
   const saveBtn = byId<HTMLButtonElement>('eth-save');
 
   // Базовое состояние с сервера для сравнения
-  const serverBaseline: EthernetInfo | null = info ? {
+  // Если с сервера пришёл полностью пустой ответ (нет ни одного из полей),
+  // считаем, что baseline отсутствует, и разрешаем сохранение по умолчанию.
+  const ethKeys = ['ip_config','ip','netmask','gateway','dns1','dns2'] as const;
+  const hasEthServerData = !!info && ethKeys.some((k) => (info as any)[k] !== undefined && String((info as any)[k] ?? '') !== '');
+  const serverBaseline: EthernetInfo | null = hasEthServerData ? {
     ip_config: initial.ip_config,
     ip: initial.ip,
     netmask: initial.netmask,
@@ -1251,4 +1651,153 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
   });
 
   // Кнопка обновления убрана: при переходе в раздел данные подгружаются автоматически
+}
+
+// -----------------------------
+// Раздел: FreeDV — форма
+// -----------------------------
+function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
+  const body = byId<HTMLElement>('content-body');
+  const initial: Required<Pick<FreeDVInfo, 'mode' | 'rate' | 'ldpc'>> = {
+    mode: (info?.mode?.toUpperCase?.() === 'FSK4' ? 'FSK4' : 'FSK2'),
+    rate: String(info?.rate ?? '500'),
+    ldpc: (info?.ldpc === '512/256' ? '512/256' : '768/256'),
+  } as any;
+
+  body.innerHTML = '';
+
+  const form = document.createElement('div');
+  form.className = 'form';
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <div class="form-section">
+      <div class="form-title">FreeDV</div>
+      <div class="form-grid">
+        <label for="freedv-mode">Mode</label>
+        <select id="freedv-mode">
+          <option value="FSK2">FSK2</option>
+          <option value="FSK4">FSK4</option>
+        </select>
+
+        <label for="freedv-rate">Rate</label>
+        <select id="freedv-rate">
+          <option value="500">500</option>
+          <option value="200">200</option>
+          <option value="100">100</option>
+          <option value="50">50</option>
+          <option value="20">20</option>
+        </select>
+
+        <label for="freedv-ldpc">LDPC</label>
+        <select id="freedv-ldpc">
+          <option value="768/256">768/256</option>
+          <option value="512/256">512/256</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button id="freedv-save" class="btn primary" type="button">Сохранить</button>
+      <div id="freedv-hint" class="hint"></div>
+    </div>
+  `;
+  while (wrapper.firstChild) form.appendChild(wrapper.firstChild as Node);
+  body.appendChild(form);
+
+  byId<HTMLSelectElement>('freedv-mode').value = initial.mode as string;
+  byId<HTMLSelectElement>('freedv-rate').value = String(initial.rate);
+  byId<HTMLSelectElement>('freedv-ldpc').value = initial.ldpc as string;
+
+  const hint = byId<HTMLDivElement>('freedv-hint');
+  const saveBtn = byId<HTMLButtonElement>('freedv-save');
+  stabilizeActionButton(saveBtn, 'Сохранение...');
+
+  // Если сервер не прислал ни одного поля (mode/rate/ldpc), baseline отсутствует
+  const freedvKeys = ['mode','rate','ldpc'] as const;
+  const hasFreeDvServerData = !!info && freedvKeys.some((k) => (info as any)[k] !== undefined && String((info as any)[k] ?? '') !== '');
+  const serverBaseline: FreeDVInfo | null = hasFreeDvServerData ? { ...initial } : null;
+
+  function collect(): Required<Pick<FreeDVInfo, 'mode' | 'rate' | 'ldpc'>> {
+    return {
+      mode: byId<HTMLSelectElement>('freedv-mode').value as any,
+      rate: byId<HTMLSelectElement>('freedv-rate').value,
+      ldpc: byId<HTMLSelectElement>('freedv-ldpc').value as any,
+    };
+  }
+
+  function validate(v: Required<Pick<FreeDVInfo, 'mode' | 'rate' | 'ldpc'>>): string | null {
+    const modes = ['FSK2', 'FSK4'];
+    const rates = ['500','200','100','50','20'];
+    const ldpcl = ['768/256','512/256'];
+    if (!modes.includes(String(v.mode))) return 'Недопустимый Mode';
+    if (!rates.includes(String(v.rate))) return 'Недопустимый Rate';
+    if (!ldpcl.includes(String(v.ldpc))) return 'Недопустимый LDPC';
+    return null;
+  }
+
+  function isDifferentFromBaseline(cur: Required<Pick<FreeDVInfo, 'mode' | 'rate' | 'ldpc'>>): boolean {
+    if (!serverBaseline) return true;
+    return (
+      String(serverBaseline.mode).toUpperCase() !== String(cur.mode).toUpperCase() ||
+      String(serverBaseline.rate) !== String(cur.rate) ||
+      String(serverBaseline.ldpc) !== String(cur.ldpc)
+    );
+  }
+
+  function updateSaveAvailability() {
+    const cur = collect();
+    const err = validate(cur);
+    if (err) {
+      hint.textContent = err;
+      hint.className = 'hint error';
+    } else if (isDifferentFromBaseline(cur)) {
+      hint.textContent = 'Есть несохранённые изменения';
+      hint.className = 'hint';
+    } else {
+      hint.textContent = '';
+      hint.className = 'hint';
+    }
+    saveBtn.disabled = isOffline() || !!err || !isDifferentFromBaseline(cur);
+  }
+
+  ['freedv-mode','freedv-rate','freedv-ldpc'].forEach((id) => {
+    byId<HTMLElement>(id).addEventListener('change', updateSaveAvailability as any);
+  });
+  updateSaveAvailability();
+
+  saveBtn.addEventListener('click', async () => {
+    const payload = collect();
+    const err = validate(payload);
+    if (err) {
+      hint.textContent = err;
+      hint.className = 'hint error';
+      return;
+    }
+    let savedOk = false;
+    try {
+      const w = saveBtn.offsetWidth; if (w) saveBtn.style.width = `${w}px`;
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Сохранение...';
+      setStatus('busy', '');
+      await API.postForm('/freedv/apply', payload as any);
+      hint.textContent = 'Изменения отправлены.';
+      hint.className = 'hint success';
+      setStatus('ok', 'Настройки FreeDV применены');
+      if (serverBaseline) {
+        (serverBaseline.mode as any) = payload.mode;
+        (serverBaseline.rate as any) = payload.rate;
+        (serverBaseline.ldpc as any) = payload.ldpc;
+      }
+      savedOk = true;
+    } catch (e: any) {
+      hint.textContent = `Ошибка сохранения: ${e?.message || e}`;
+      hint.className = 'hint error';
+      setStatus('error', 'Ошибка сохранения FreeDV');
+    } finally {
+      saveBtn.disabled = isOffline() || savedOk;
+      saveBtn.textContent = 'Сохранить';
+      saveBtn.style.width = '';
+      if (!saveBtn.disabled) updateSaveAvailability();
+    }
+  });
 }

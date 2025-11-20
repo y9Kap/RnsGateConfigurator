@@ -5,7 +5,8 @@
 Смотрите также файл CHANGELOG.md для истории изменений.
 
 ## Возможности
-- Разделы: RNSd, FreeDV, LoraSPI (сырой вывод), WiFi и Ethernet (формы).
+- Разделы: RNSD, FreeDV (сырой вывод), WiFi и Ethernet (формы).
+- Примечание: секция LoraSPI больше не поддерживается и удалена из кода.
 - WiFi: режимы client/AP, загрузка через GET /cgi-bin/wifi/info, сохранение через POST /cgi-bin/wifi/apply, DHCP/Static, локальные подсказки и профиль (localStorage: profile_wifi).
 - Ethernet: загрузка через GET /cgi-bin/ethernet/info, сохранение через POST /cgi-bin/ethernet/apply, DHCP/Static, локальные подсказки и профиль (localStorage: profile_ethernet).
 - Статус‑бар сети: online, offline, busy, error, мягкие переключения цвета; центрированное сообщение в шапке.
@@ -27,7 +28,7 @@
   - POST {CGI_BASE}/wifi/apply (application/x-www-form-urlencoded)
   - GET  {CGI_BASE}/ethernet/info
   - POST {CGI_BASE}/ethernet/apply (application/x-www-form-urlencoded)
-  - GET  {CGI_BASE}/{section}/info для RNSd/FreeDV/LoraSPI
+  - GET  {CGI_BASE}/{section}/info для RNSD/FreeDV
 
 При ответе JSON (Content-Type: application/json) тело парсится; иначе текст показывается «как есть». Ошибки HTTP сопровождаются сообщением из JSON.message или заголовка <title>.
 
