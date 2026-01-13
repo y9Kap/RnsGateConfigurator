@@ -1,4 +1,4 @@
-import { API, isOffline } from './api';
+import {API, isOffline} from './api';
 
 // -----------------------------
 // Настройки режимов автозаполнения
@@ -14,28 +14,6 @@ function getAutoFillMode(): AutoFillMode {
         return 'hints';
     }
 }
-
-function setAutoFillMode(mode: AutoFillMode) {
-    try { localStorage.setItem(AF_MODE_KEY, mode); } catch {}
-}
-
-function toggleAutoFillMode(): AutoFillMode {
-    const next: AutoFillMode = getAutoFillMode() === 'hints' ? 'fill' : 'hints';
-    setAutoFillMode(next);
-    return next;
-}
-
-function updateAutoFillToggleUI() {
-    const btn = document.getElementById('autofill-toggle') as HTMLButtonElement | null;
-    if (!btn) return;
-    const mode = getAutoFillMode();
-    btn.textContent = `Автозаполнение: ${mode === 'hints' ? 'Подсказки' : 'Полное'}`;
-    btn.setAttribute('aria-pressed', String(mode === 'fill'));
-    btn.title = mode === 'hints'
-        ? 'Подсказки в полях ввода (datalist)'
-        : 'Автоматически подставлять сохранённые значения';
-}
-
 // Сохранение/загрузка локальных профилей для форм
 const WIFI_PROFILE_KEY = 'profile_wifi';
 const ETH_PROFILE_KEY = 'profile_ethernet';
@@ -107,11 +85,7 @@ function initUI() {
     const h1 = document.createElement('h1');
     h1.id = 'section-title';
     header.appendChild(h1);
-    // Центрированное текстовое сообщение топ-бара
-    const topMsg = document.createElement('div');
-    topMsg.id = 'top-message';
-    topMsg.className = 'top-message';
-    header.appendChild(topMsg);
+
     const status = document.createElement('div');
     status.id = 'net-status';
     status.className = 'status';
@@ -200,6 +174,11 @@ function initUI() {
 
     shell.appendChild(sidebar);
     shell.appendChild(content);
+    
+    const toasts = document.createElement('div');
+    toasts.id = 'toast-container';
+    shell.appendChild(toasts);
+
     app.innerHTML = '';
     app.appendChild(shell);
 
@@ -853,7 +832,6 @@ function handleInterfacesDelete() {
 
 async function handleInterfacesSave() {
     const list = ifLoadAll();
-    // Пытаемся сохранить на сервере одним махом
     try {
         if (isOffline()) throw new Error('offline');
         await API.postForm('/interfaces/apply', { payload: JSON.stringify(list) });
@@ -880,6 +858,35 @@ const STATUS_COLOR_MIN_INTERVAL = 500; // мс между сменами цве�
 let lastIndicatorSwitch = 0; // момент последнего применения класса
 let indicatorTimer: number | null = null; // таймер отложенного применения
 let indicatorPending: { kind: StatusKind; text: string } | null = null; // последняя запрошенная
+
+function showToast(kind: StatusKind, text: string) {
+    const container = document.getElementById('toast-container');
+    if (!container || !kind || kind === 'busy') return;
+
+    // Предотвращение дубликатов (если такое же сообщение уже показывается)
+    const existing = Array.from(container.children).find(el => el.textContent === text);
+    if (existing) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${kind}`;
+    toast.textContent = text;
+    container.appendChild(toast);
+
+    // Анимация появления
+    requestAnimationFrame(() => {
+        toast.classList.add('visible');
+    });
+
+    // Автоматическое удаление
+    const duration = kind === 'ok' ? 3000 : 5000;
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        // Даем время на анимацию исчезновения перед удалением из DOM
+        setTimeout(() => {
+            if (toast.parentElement) toast.remove();
+        }, 400);
+    }, duration);
+}
 
 function applyIndicator(kind: StatusKind, text: string) {
     const el = document.getElementById('net-status');
@@ -928,20 +935,10 @@ function scheduleIndicator(kind: StatusKind, text: string) {
 }
 
 function setStatus(kind: StatusKind, text: string) {
-    const msg = document.getElementById('top-message');
     const hasText = typeof text === 'string' && text.trim().length > 0;
 
-    // Центрированное сообщение в топ-баре — обновляем сразу, без задержек
-    if (msg) {
-        msg.textContent = '';
-        msg.classList.remove('ok', 'error');
-        if (kind === 'ok' && hasText) {
-            msg.textContent = text.trim();
-            msg.classList.add('ok');
-        } else if (kind === 'error') {
-            msg.textContent = hasText ? text.trim() : 'Ошибка';
-            msg.classList.add('error');
-        }
+    if (hasText && kind !== 'busy') {
+        showToast(kind, text.trim());
     }
 
     // Визуальный индикатор состояния — меняем цвет с искусственной задержкой
@@ -1109,53 +1106,6 @@ function isValidIp(v?: string): boolean {
     });
 }
 
-// Утилиты отображения «текущего состояния» для интерфейсов
-const SENSITIVE_RE = /(pass|password|secret|key|token)/i;
-
-function redactForDisplay(data: any): any {
-    if (data === null || data === undefined) return data;
-    if (Array.isArray(data)) return data.map((v) => redactForDisplay(v));
-    if (typeof data === 'object') {
-        const out: Record<string, any> = {};
-        for (const [k, v] of Object.entries(data)) {
-            if (SENSITIVE_RE.test(k)) {
-                out[k] = '••••••';
-            } else {
-                out[k] = redactForDisplay(v);
-            }
-        }
-        return out;
-    }
-    return data;
-}
-
-function createInfoSection(title: string, info?: Record<string, any>): HTMLElement {
-    const section = document.createElement('div');
-    section.className = 'form-section';
-    const h = document.createElement('div');
-    h.className = 'form-title';
-    h.textContent = title;
-    section.appendChild(h);
-    const content = document.createElement('div');
-    if (info && typeof info === 'object') {
-        const pre = document.createElement('pre');
-        pre.className = 'code';
-        try {
-            pre.textContent = JSON.stringify(redactForDisplay(info), null, 2);
-        } catch {
-            pre.textContent = String(info);
-        }
-        content.appendChild(pre);
-    } else {
-        const p = document.createElement('div');
-        p.textContent = 'Нет данных о текущем состоянии.';
-        content.appendChild(p);
-    }
-    section.appendChild(content);
-    return section;
-}
-
-// Универсальный парсер ответа /<id>/info: поддерживает JSON и key=value
 function parseInfoForSection(
     id: string,
     data: unknown,
@@ -1425,8 +1375,7 @@ function renderRnsdConfig(data: unknown | undefined) {
         return s;
     };
     const normPin = (v: any): string | undefined => {
-        const s = getStr(v);
-        return s;
+        return getStr(v);
     };
 
     const initialSpi = {
@@ -1543,31 +1492,7 @@ function renderRnsdConfig(data: unknown | undefined) {
         gpio_tx_en_chip: string; gpio_tx_en_pin: string;
         gpio_rx_en_chip: string; gpio_rx_en_pin: string;
     };
-
-    const collect = (): SpiModel | null => {
-        const read = (id: string) => {
-            const el = document.getElementById(id) as HTMLInputElement | null;
-            if (!el) return undefined as any;
-            const s = (el.value ?? '').trim();
-            return s ? s : undefined;
-        };
-        const v = {
-            spi_chip: read('spi-chip'), spi_pin: read('spi-pin'),
-            gpio_irq_chip: read('gpio-irq-chip'), gpio_irq_pin: read('gpio-irq-pin'),
-            gpio_busy_chip: read('gpio-busy-chip'), gpio_busy_pin: read('gpio-busy-pin'),
-            gpio_nrst_chip: read('gpio-nrst-chip'), gpio_nrst_pin: read('gpio-nrst-pin'),
-            gpio_tx_en_chip: read('gpio-tx-en-chip'), gpio_tx_en_pin: read('gpio-tx-en-pin'),
-            gpio_rx_en_chip: read('gpio-rx-en-chip'), gpio_rx_en_pin: read('gpio-rx-en-pin'),
-        } as Record<string, any>;
-        // Проверим, что все значения заданы
-        const keys = Object.keys(v);
-        for (const k of keys) {
-            if (v[k] === undefined) return null;
-        }
-        return v as SpiModel;
-    };
-
-    const serverBaseline: Partial<SpiModel> | null = (() => {
+    (() => {
         // Если сервер прислал хоть одно поле — считаем baseline заданным
         const any = Object.values(initialSpi).some((x) => x !== undefined);
         if (!any) return null;
@@ -1582,38 +1507,6 @@ function renderRnsdConfig(data: unknown | undefined) {
             gpio_rx_en_chip: toStr(initialSpi.gpio_rx_en_chip)!, gpio_rx_en_pin: toStr(initialSpi.gpio_rx_en_pin)!,
         } as Partial<SpiModel>;
     })();
-
-    const isDifferentFromBaseline = (cur: SpiModel | null): boolean => {
-        if (!cur) return false; // не все заполнено — пока не сохраняем
-        if (!serverBaseline) return true;
-        const keys = Object.keys(cur) as (keyof SpiModel)[];
-        return keys.some((k) => (serverBaseline as any)[k] === undefined || (serverBaseline as any)[k] !== (cur as any)[k]);
-    };
-
-    const validate = (cur: SpiModel | null): string | null => {
-        if (!cur) return 'Заполните все поля';
-        // SPI: chip "spiN" и pin — номер
-        if (!/^spi\d+$/.test(cur.spi_chip)) return 'SPI Chip должен быть вида spiN (например spi0)';
-        if (!/^\d+$/.test(cur.spi_pin)) return 'SPI Pin (CS) должен быть числом (например 0)';
-        const chipFields: (keyof SpiModel)[] = ['gpio_irq_chip','gpio_busy_chip','gpio_nrst_chip','gpio_tx_en_chip','gpio_rx_en_chip'];
-        for (const cf of chipFields) {
-            const v = cur[cf] as string;
-            if (!/^(?:\/dev\/)?gpiochip\d+$/.test(v) && !/^gpiochip\d+$/.test(v)) {
-                return 'Имя GPIO чипа должно быть вида gpiochipN (например gpiochip1)';
-            }
-        }
-        // Пины могут быть номером или именем — требуем непустые значения
-        const pinFields: (keyof SpiModel)[] = ['gpio_irq_pin','gpio_busy_pin','gpio_nrst_pin','gpio_tx_en_pin','gpio_rx_en_pin'];
-        for (const pf of pinFields) {
-            if (!cur[pf] || String(cur[pf]).trim() === '') return 'Укажите номер или имя GPIO пина';
-        }
-        return null;
-    };
-
-    // Доступность сохранения будет обрабатываться общей кнопкой (вне секции SPI)
-    const updateSaveAvailability = () => {};
-
-    // Сохранение обрабатывается общей кнопкой (не здесь)
 }
 
 function normalizeKeys(input: Record<string, any>): Record<string, any> {
