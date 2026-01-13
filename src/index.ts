@@ -347,6 +347,9 @@ type FieldDef = {
     type: 'text' | 'number' | 'select';
     default: any;
     options?: string[];
+    min?: number;
+    max?: number;
+    datalist?: string[];
 };
 
 type TypeDef = {
@@ -359,6 +362,18 @@ const IF_STORAGE_KEY = 'interfaces_config';
 const IF_CUR_KEY = 'interfaces_current_id';
 const IF_BASELINE_KEY = 'interfaces_saved_baseline'; // снимок последнего успешного сохранения на устройство
 let interfacesBaselineJSON: string | null = null; // кэш baseline за сессию
+
+const RN_PRESETS: Record<string, { bw: number, sf: number, cr: number }> = {
+    'Short Turbo': { bw: 500, sf: 7, cr: 5 },
+    'Short Fast': { bw: 250, sf: 7, cr: 5 },
+    'Short Slow': { bw: 250, sf: 8, cr: 5 },
+    'Medium Fast': { bw: 250, sf: 9, cr: 5 },
+    'Medium Slow': { bw: 250, sf: 10, cr: 5 },
+    'Long Turbo': { bw: 500, sf: 11, cr: 8 },
+    'Long Fast': { bw: 250, sf: 11, cr: 5 },
+    'Long Moderate': { bw: 125, sf: 11, cr: 8 },
+    'Long Slow': { bw: 125, sf: 12, cr: 8 },
+};
 
 const INTERFACE_TYPES: TypeDef[] = [
     {
@@ -381,8 +396,19 @@ const INTERFACE_TYPES: TypeDef[] = [
         value: 'rnode',
         label: 'RNode',
         fields: [
+            { key: 'preset', label: 'Radio Preset', type: 'select', default: 'не выбран', options: ['не выбран', ...Object.keys(RN_PRESETS)] },
             { key: 'serial', label: 'Serial Port', type: 'text', default: '/dev/ttyUSB0' },
-            { key: 'baud', label: 'Baud', type: 'number', default: 115200 },
+            { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 468 },
+            {
+                key: 'bandwidth',
+                label: 'Bandwidth (kHz)',
+                type: 'number',
+                default: 125,
+                datalist: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
+            },
+            { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
+            { key: 'coding_rate', label: 'Coding Rate', type: 'select', default: 5, options: ['5', '6', '7', '8'] },
+            { key: 'spread_factor', label: 'Spread Factor', type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
         ],
     },
     {
@@ -415,6 +441,18 @@ const INTERFACE_TYPES: TypeDef[] = [
 
             { key: 'rxen_chip', label: 'RX EN Chip', type: 'text', default: 'gpiochip1' },
             { key: 'rxen_pin', label: 'RX EN Pin', type: 'text', default: '' },
+
+            { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 468 },
+            {
+                key: 'bandwidth',
+                label: 'Bandwidth (kHz)',
+                type: 'number',
+                default: 125,
+                datalist: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
+            },
+            { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
+            { key: 'coding_rate', label: 'Coding Rate', type: 'select', default: 5, options: ['5', '6', '7', '8'] },
+            { key: 'spread_factor', label: 'Spread Factor', type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
         ]
 
     },
@@ -738,7 +776,20 @@ function renderInterfacesForm() {
             });
 
             container.appendChild(table);
-            return; // специальный рендер завершён
+
+            // Отрисовываем остальные поля (радио-параметры), которые не вошли в таблицу
+            const tableKeys = new Set<string>();
+            rows.forEach(r => { tableKeys.add(r.chipKey); tableKeys.add(r.pinKey); });
+
+            const remainingFields = tdef.fields.filter(f => !tableKeys.has(f.key));
+            if (remainingFields.length > 0) {
+                const grid = document.createElement('div');
+                grid.className = 'form-grid';
+                grid.style.marginTop = '20px';
+                container.appendChild(grid);
+                remainingFields.forEach(f => renderField(f, grid, item, itemId));
+            }
+            return;
         }
 
         // Универсальная раскладка для прочих типов
@@ -746,53 +797,102 @@ function renderInterfacesForm() {
         grid.className = 'form-grid';
         container.appendChild(grid);
         tdef.fields.forEach((f) => {
-            const lab = document.createElement('label');
-            lab.setAttribute('for', `if-field-${f.key}`);
-            lab.textContent = f.label;
-            let input: HTMLElement;
-            if (f.type === 'select') {
-                const sel = document.createElement('select');
-                sel.id = `if-field-${f.key}`;
-                (f.options || []).forEach((optv) => {
-                    const o = document.createElement('option');
-                    o.value = String(optv);
-                    o.textContent = String(optv);
-                    sel.appendChild(o);
-                });
-                sel.value = String(item.settings[f.key] ?? f.default);
-                sel.addEventListener('change', () => {
-                    const a = ifLoadAll();
-                    const it = a.find(i => i.id === itemId);
-                    if (!it) return;
-                    it.settings[f.key] = sel.value;
-                    ifSaveAll(a);
-                    updateInterfacesHeaderUI();
-                });
-                input = sel;
-            } else {
-                const inp = document.createElement('input');
-                inp.id = `if-field-${f.key}`;
-                inp.type = f.type === 'number' ? 'number' : 'text';
-                const v = item.settings[f.key] ?? f.default;
-                inp.value = v === undefined || v === null ? '' : String(v);
-                inp.addEventListener('input', () => {
-                    const a = ifLoadAll();
-                    const it = a.find(i => i.id === itemId);
-                    if (!it) return;
-                    if (f.type === 'number') {
-                        const n = inp.value.trim() === '' ? null : Number(inp.value);
-                        it.settings[f.key] = Number.isFinite(n as any) ? Number(n) : null;
-                    } else {
-                        it.settings[f.key] = inp.value;
-                    }
-                    ifSaveAll(a);
-                    updateInterfacesHeaderUI();
-                });
-                input = inp;
-            }
-            grid.appendChild(lab);
-            grid.appendChild(input);
+            renderField(f, grid, item, itemId);
         });
+    }
+
+    function renderField(f: any, grid: HTMLElement, item: InterfaceItem, itemId: string) {
+        const lab = document.createElement('label');
+        lab.setAttribute('for', `if-field-${f.key}`);
+        lab.textContent = f.label;
+        let input: HTMLElement;
+        if (f.type === 'select') {
+            const sel = document.createElement('select');
+            sel.id = `if-field-${f.key}`;
+            (f.options || []).forEach((optv: any) => {
+                const o = document.createElement('option');
+                o.value = String(optv);
+                o.textContent = String(optv);
+                sel.appendChild(o);
+            });
+            sel.value = String(item.settings[f.key] ?? f.default);
+            sel.addEventListener('change', () => {
+                const a = ifLoadAll();
+                const it = a.find(i => i.id === itemId);
+                if (!it) return;
+                it.settings[f.key] = sel.value;
+
+                // Если это пресет RNode — подставляем BW/CR/SF
+                if (item.type === 'rnode' && f.key === 'preset' && RN_PRESETS[sel.value]) {
+                    const p = RN_PRESETS[sel.value];
+                    it.settings['bandwidth'] = p.bw;
+                    it.settings['coding_rate'] = p.cr;
+                    it.settings['spread_factor'] = p.sf;
+
+                    const bwInp = byId<HTMLInputElement>('if-field-bandwidth');
+                    const crInp = byId<HTMLSelectElement>('if-field-coding_rate');
+                    const sfInp = byId<HTMLSelectElement>('if-field-spread_factor');
+                    if (bwInp) bwInp.value = String(p.bw);
+                    if (crInp) crInp.value = String(p.cr);
+                    if (sfInp) sfInp.value = String(p.sf);
+                }
+
+                ifSaveAll(a);
+                updateInterfacesHeaderUI();
+            });
+            input = sel;
+        } else {
+            const inp = document.createElement('input');
+            inp.id = `if-field-${f.key}`;
+            inp.type = f.type === 'number' ? 'number' : 'text';
+            if (f.type === 'number') inp.step = 'any';
+            if (f.min !== undefined) inp.setAttribute('min', String(f.min));
+            if (f.max !== undefined) inp.setAttribute('max', String(f.max));
+            if (f.datalist) attachDatalist(inp, f.datalist, f.key);
+
+            // Динамическое обновление datalist для Bandwidth в RNode и LoraSPI
+            if ((item.type === 'rnode' || item.type === 'loraspi') && f.key === 'bandwidth' && f.datalist) {
+                const originalDatalist = f.datalist;
+                inp.addEventListener('input', () => {
+                    const val = inp.value.trim().toLowerCase();
+                    if (!val) {
+                        attachDatalist(inp, [], f.key);
+                        return;
+                    }
+                    const filtered = originalDatalist.filter(v => v.toLowerCase().includes(val));
+                    attachDatalist(inp, filtered, f.key);
+                });
+            }
+
+            const v = item.settings[f.key] ?? f.default;
+            inp.value = v === undefined || v === null ? '' : String(v);
+            inp.addEventListener('input', () => {
+                const a = ifLoadAll();
+                const it = a.find(i => i.id === itemId);
+                if (!it) return;
+                if (f.type === 'number') {
+                    const n = inp.value.trim() === '' ? null : Number(inp.value);
+                    it.settings[f.key] = Number.isFinite(n as any) ? Number(n) : null;
+                } else {
+                    it.settings[f.key] = inp.value;
+                }
+
+                // Если вручную меняем параметры радио — сбрасываем пресет
+                if ((item.type === 'rnode' || item.type === 'loraspi') && ['bandwidth', 'coding_rate', 'spread_factor'].includes(f.key)) {
+                    if (it.settings['preset'] !== undefined) {
+                        it.settings['preset'] = 'не выбран';
+                        const preSel = byId<HTMLSelectElement>('if-field-preset');
+                        if (preSel) preSel.value = 'не выбран';
+                    }
+                }
+
+                ifSaveAll(a);
+                updateInterfacesHeaderUI();
+            });
+            input = inp;
+        }
+        grid.appendChild(lab);
+        grid.appendChild(input);
     }
 }
 
@@ -1110,6 +1210,15 @@ function attachDatalist(input: HTMLInputElement, options: string[], idSuffix: st
         dl.id = listId;
         document.body.appendChild(dl);
     }
+
+    const currentOptions = Array.from(dl.options).map(o => o.value);
+    if (currentOptions.length === options.length && currentOptions.every((v, i) => v === options[i])) {
+        if (input.getAttribute('list') !== listId) {
+            input.setAttribute('list', listId);
+        }
+        return;
+    }
+
     dl.innerHTML = '';
     options.forEach((v) => {
         const opt = document.createElement('option');
