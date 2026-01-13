@@ -247,12 +247,6 @@ async function loadSectionData(id: string) {
     try {
         // Показать индикатор выполнения на время запроса
         setStatus('busy', '');
-        // Для раздела Interfaces не запрашиваем CGI — работаем локально
-        if (id === 'interfaces') {
-            if (bodyEl) renderInterfacesForm();
-            setStatus('ok', '');
-            return;
-        }
         const data = await API.get(`/${id}/info`);
         if (bodyEl) {
             // Специализированные формы для WiFi/Ethernet/FreeDV, остальные — сырые данные
@@ -264,6 +258,24 @@ async function loadSectionData(id: string) {
                 renderFreeDVForm(parseInfoForSection(id, data) as any);
             } else if (id === 'rnsd') {
                 renderRnsdConfig(data);
+            } else if (id === 'interfaces') {
+                const raw = unwrapDataPayload(data);
+                let list: InterfaceItem[] = [];
+                if (Array.isArray(raw)) {
+                    list = raw as InterfaceItem[];
+                } else if (typeof raw === 'string') {
+                    try {
+                        const j = JSON.parse(raw);
+                        if (Array.isArray(j)) list = j;
+                    } catch {}
+                }
+                if (list.length > 0) {
+                    ifSaveAll(list);
+                    // Обновляем baseline
+                    interfacesBaselineJSON = JSON.stringify(list);
+                    localStorage.setItem(IF_BASELINE_KEY, interfacesBaselineJSON);
+                }
+                renderInterfacesForm();
             } else {
                 const pre = document.createElement('pre');
                 pre.className = 'code';
@@ -300,7 +312,7 @@ async function loadSectionData(id: string) {
         } else if (id === 'interfaces') {
             if (bodyEl) renderInterfacesForm();
             if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
-            else setStatus('ok', '');
+            else setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
             return;
         } else {
             if (isOffline()) {
@@ -462,6 +474,18 @@ function nextInterfaceName(list: InterfaceItem[]): string {
 function renderInterfacesForm() {
     const body = byId<HTMLElement>('content-body');
     const list = ifLoadAll();
+
+    // Синхронизируем baseline при первом рендере, если он еще не задан
+    if (interfacesBaselineJSON === null) {
+        interfacesBaselineJSON = localStorage.getItem(IF_BASELINE_KEY);
+        // Если и в localStorage нет — значит это самый первый запуск,
+        // считаем текущее состояние за baseline (или пустоту)
+        if (interfacesBaselineJSON === null) {
+            interfacesBaselineJSON = JSON.stringify(list);
+            try { localStorage.setItem(IF_BASELINE_KEY, interfacesBaselineJSON); } catch {}
+        }
+    }
+
     let curId = ifGetCurrentId();
     if (!curId && list.length) {
         curId = list[0].id;
