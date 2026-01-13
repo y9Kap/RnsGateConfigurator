@@ -364,15 +364,15 @@ const IF_BASELINE_KEY = 'interfaces_saved_baseline'; // снимок после�
 let interfacesBaselineJSON: string | null = null; // кэш baseline за сессию
 
 const RN_PRESETS: Record<string, { bw: number, sf: number, cr: number }> = {
-    'Short Turbo': { bw: 500, sf: 7, cr: 5 },
-    'Short Fast': { bw: 250, sf: 7, cr: 5 },
-    'Short Slow': { bw: 250, sf: 8, cr: 5 },
-    'Medium Fast': { bw: 250, sf: 9, cr: 5 },
-    'Medium Slow': { bw: 250, sf: 10, cr: 5 },
-    'Long Turbo': { bw: 500, sf: 11, cr: 8 },
-    'Long Fast': { bw: 250, sf: 11, cr: 5 },
-    'Long Moderate': { bw: 125, sf: 11, cr: 8 },
-    'Long Slow': { bw: 125, sf: 12, cr: 8 },
+    'Short Turbo (21.88 kbps, 140dB)': { bw: 500, sf: 7, cr: 5 },
+    'Short Fast (10.94 kbps, 143dB)': { bw: 250, sf: 7, cr: 5 },
+    'Short Slow (6.25 kbps, 145.5dB)': { bw: 250, sf: 8, cr: 5 },
+    'Medium Fast (3.52 kbps, 148dB)': { bw: 250, sf: 9, cr: 5 },
+    'Medium Slow (1.95 kbps, 150.5dB)': { bw: 250, sf: 10, cr: 5 },
+    'Long Turbo (1.34 kbps, 150dB)': { bw: 500, sf: 11, cr: 8 },
+    'Long Fast (1.07 kbps, 153dB)': { bw: 250, sf: 11, cr: 5 },
+    'Long Moderate (0.34 kbps, 156dB)': { bw: 125, sf: 11, cr: 8 },
+    'Long Slow (0.18 kbps, 158.5dB)': { bw: 125, sf: 12, cr: 8 },
 };
 
 const INTERFACE_TYPES: TypeDef[] = [
@@ -396,8 +396,9 @@ const INTERFACE_TYPES: TypeDef[] = [
         value: 'rnode',
         label: 'RNode',
         fields: [
-            { key: 'preset', label: 'Radio Preset', type: 'select', default: 'не выбран', options: ['не выбран', ...Object.keys(RN_PRESETS)] },
             { key: 'serial', label: 'Serial Port', type: 'text', default: '/dev/ttyUSB0' },
+            { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
+            { key: 'preset', label: 'Radio Preset', type: 'select', default: 'не выбран', options: ['не выбран', ...Object.keys(RN_PRESETS)] },
             { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 468 },
             {
                 key: 'bandwidth',
@@ -406,7 +407,6 @@ const INTERFACE_TYPES: TypeDef[] = [
                 default: 125,
                 datalist: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
             },
-            { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
             { key: 'coding_rate', label: 'Coding Rate', type: 'select', default: 5, options: ['5', '6', '7', '8'] },
             { key: 'spread_factor', label: 'Spread Factor', type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
         ],
@@ -442,6 +442,8 @@ const INTERFACE_TYPES: TypeDef[] = [
             { key: 'rxen_chip', label: 'RX EN Chip', type: 'text', default: 'gpiochip1' },
             { key: 'rxen_pin', label: 'RX EN Pin', type: 'text', default: '' },
 
+            { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
+            { key: 'preset', label: 'Radio Preset', type: 'select', default: 'не выбран', options: ['не выбран', ...Object.keys(RN_PRESETS)] },
             { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 468 },
             {
                 key: 'bandwidth',
@@ -450,7 +452,6 @@ const INTERFACE_TYPES: TypeDef[] = [
                 default: 125,
                 datalist: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
             },
-            { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
             { key: 'coding_rate', label: 'Coding Rate', type: 'select', default: 5, options: ['5', '6', '7', '8'] },
             { key: 'spread_factor', label: 'Spread Factor', type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
         ]
@@ -822,8 +823,8 @@ function renderInterfacesForm() {
                 if (!it) return;
                 it.settings[f.key] = sel.value;
 
-                // Если это пресет RNode — подставляем BW/CR/SF
-                if (item.type === 'rnode' && f.key === 'preset' && RN_PRESETS[sel.value]) {
+                // Если это пресет RNode или LoraSPI — подставляем BW/CR/SF
+                if ((item.type === 'rnode' || item.type === 'loraspi') && f.key === 'preset' && RN_PRESETS[sel.value]) {
                     const p = RN_PRESETS[sel.value];
                     it.settings['bandwidth'] = p.bw;
                     it.settings['coding_rate'] = p.cr;
