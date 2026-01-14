@@ -1,12 +1,13 @@
 {
   "name": "rns-gate_configurator",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "description": "",
   "main": "dist/index.js",
   "scripts": {
+    "clean": "rm -rf dist",
     "build": "esbuild src/index.ts --bundle --minify --sourcemap --outfile=dist/bundle.js --platform=browser",
-    "copy:static": "cp index.html dist/index.html && cp styles.css dist/styles.css && mkdir -p dist/assets && cp src/assets/favicon.svg dist/assets/favicon.svg",
-    "build:all": "npm run build && npm run copy:static"
+    "copy:static": "mkdir -p dist/assets && cp index.html dist/index.html && cp styles.css dist/styles.css && cp src/assets/favicon.svg dist/assets/favicon.svg",
+    "build:all": "npm run clean && npm run build && npm run copy:static"
   },
   "devDependencies": {
     "esbuild": "^0.27.0",
