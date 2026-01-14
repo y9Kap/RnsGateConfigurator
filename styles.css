@@ -562,6 +562,7 @@ body {
   /* Стабильное вертикальное выравнивание текста без скачков */
   display: inline-flex;
   align-items: center;
+  justify-content: center;
 }
 
 .btn.primary {
@@ -570,9 +571,27 @@ body {
   border-color: #1e293b;
 }
 
+.btn.danger {
+  color: #dc2626; /* red-600 */
+  border-color: #fca5a5; /* red-300 */
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: #fef2f2; /* red-50 */
+  border-color: #f87171; /* red-400 */
+  color: #b91c1c; /* red-700 */
+}
+
+.btn.danger:active:not(:disabled) {
+  background: #fee2e2; /* red-100 */
+}
+
 .btn:disabled {
-  opacity: 0.6;
-  cursor: default;
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f1f5f9; /* slate-100 */
+  color: #94a3b8; /* slate-400 */
+  border-color: #e2e8f0; /* slate-200 */
 }
 
 .hint {

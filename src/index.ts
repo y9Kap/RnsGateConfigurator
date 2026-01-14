@@ -102,7 +102,7 @@ function initUI() {
     header.appendChild(ifAddBtn);
     const ifDelBtn = document.createElement('button');
     ifDelBtn.id = 'if-del-btn';
-    ifDelBtn.className = 'btn';
+    ifDelBtn.className = 'btn danger';
     ifDelBtn.type = 'button';
     ifDelBtn.textContent = 'Удалить';
     ifDelBtn.disabled = true;
@@ -119,7 +119,11 @@ function initUI() {
     ifSaveBtn.disabled = true;
     ifSaveBtn.style.display = 'none';
     ifSaveBtn.addEventListener('click', async () => {
-        await handleInterfacesSave();
+        if (currentSectionId === 'interfaces') {
+            await handleInterfacesSave();
+        } else if (currentSaveAction) {
+            await currentSaveAction();
+        }
     });
     header.appendChild(ifSaveBtn);
     // Кнопка «Заполнить актуальные данные» — подтягивает текущие значения с устройства
@@ -187,6 +191,7 @@ function initUI() {
 }
 
 let currentSectionId: string = sections[0].id;
+let currentSaveAction: (() => Promise<void>) | null = null;
 
 function selectSection(id: string) {
     // Update active state in menu
@@ -218,12 +223,14 @@ function selectSection(id: string) {
     const ifDelBtn = document.getElementById('if-del-btn') as HTMLButtonElement | null;
     const ifSaveBtn = document.getElementById('if-save-btn') as HTMLButtonElement | null;
     const isInterfaces = id === 'interfaces';
+    const sectionsWithSave = ['interfaces', 'wifi', 'ethernet', 'freedv'];
     if (fillBtn) fillBtn.style.display = isInterfaces ? 'none' : '';
     if (resetBtn) resetBtn.style.display = isInterfaces ? 'none' : '';
     if (ifAddBtn) ifAddBtn.style.display = isInterfaces ? '' : 'none';
     if (ifDelBtn) ifDelBtn.style.display = isInterfaces ? '' : 'none';
-    if (ifSaveBtn) ifSaveBtn.style.display = isInterfaces ? '' : 'none';
+    if (ifSaveBtn) ifSaveBtn.style.display = sectionsWithSave.includes(id) ? '' : 'none';
     if (isInterfaces) updateInterfacesHeaderUI();
+    else currentSaveAction = null; // сброс для других разделов, они сами установят если надо
     updateStatusBar();
     // Пробуем загрузить текущие данные раздела через CGI (GET /cgi-bin/<id>/info)
     loadSectionData(section.id)
@@ -399,13 +406,13 @@ const INTERFACE_TYPES: TypeDef[] = [
             { key: 'serial', label: 'Serial Port', type: 'text', default: '/dev/ttyUSB0' },
             { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
             { key: 'preset', label: 'Radio Preset', type: 'select', default: 'не выбран', options: ['не выбран', ...Object.keys(RN_PRESETS)] },
-            { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 468 },
+            { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 868 },
             {
                 key: 'bandwidth',
                 label: 'Bandwidth (kHz)',
-                type: 'number',
+                type: 'select',
                 default: 125,
-                datalist: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
+                options: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
             },
             { key: 'coding_rate', label: 'Coding Rate', type: 'select', default: 5, options: ['5', '6', '7', '8'] },
             { key: 'spread_factor', label: 'Spread Factor', type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
@@ -444,13 +451,13 @@ const INTERFACE_TYPES: TypeDef[] = [
 
             { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
             { key: 'preset', label: 'Radio Preset', type: 'select', default: 'не выбран', options: ['не выбран', ...Object.keys(RN_PRESETS)] },
-            { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 468 },
+            { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 868 },
             {
                 key: 'bandwidth',
                 label: 'Bandwidth (kHz)',
-                type: 'number',
+                type: 'select',
                 default: 125,
-                datalist: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
+                options: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
             },
             { key: 'coding_rate', label: 'Coding Rate', type: 'select', default: 5, options: ['5', '6', '7', '8'] },
             { key: 'spread_factor', label: 'Spread Factor', type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
@@ -830,7 +837,7 @@ function renderInterfacesForm() {
                     it.settings['coding_rate'] = p.cr;
                     it.settings['spread_factor'] = p.sf;
 
-                    const bwInp = byId<HTMLInputElement>('if-field-bandwidth');
+                    const bwInp = byId<HTMLSelectElement>('if-field-bandwidth');
                     const crInp = byId<HTMLSelectElement>('if-field-coding_rate');
                     const sfInp = byId<HTMLSelectElement>('if-field-spread_factor');
                     if (bwInp) bwInp.value = String(p.bw);
@@ -850,20 +857,6 @@ function renderInterfacesForm() {
             if (f.min !== undefined) inp.setAttribute('min', String(f.min));
             if (f.max !== undefined) inp.setAttribute('max', String(f.max));
             if (f.datalist) attachDatalist(inp, f.datalist, f.key);
-
-            // Динамическое обновление datalist для Bandwidth в RNode и LoraSPI
-            if ((item.type === 'rnode' || item.type === 'loraspi') && f.key === 'bandwidth' && f.datalist) {
-                const originalDatalist = f.datalist;
-                inp.addEventListener('input', () => {
-                    const val = inp.value.trim().toLowerCase();
-                    if (!val) {
-                        attachDatalist(inp, [], f.key);
-                        return;
-                    }
-                    const filtered = originalDatalist.filter(v => v.toLowerCase().includes(val));
-                    attachDatalist(inp, filtered, f.key);
-                });
-            }
 
             const v = item.settings[f.key] ?? f.default;
             inp.value = v === undefined || v === null ? '' : String(v);
@@ -1756,7 +1749,6 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     </div>
 
     <div class="form-actions">
-      <button id="wifi-save" class="btn primary" type="button">Сохранить</button>
       <div id="wifi-hint" class="hint"></div>
     </div>
   `;
@@ -1846,7 +1838,7 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     }
 
     const hint = byId<HTMLDivElement>('wifi-hint');
-    const saveBtn = byId<HTMLButtonElement>('wifi-save');
+    const saveBtn = byId<HTMLButtonElement>('if-save-btn');
 
     // Ранее использовался serverBaseline; теперь работаем от «последнего сохранения»
 
@@ -1960,7 +1952,7 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
         return null;
     }
 
-    saveBtn.addEventListener('click', async () => {
+    currentSaveAction = async () => {
         if (isOffline()) return; // на всякий случай
         hint.textContent = '';
         hint.className = 'hint';
@@ -1998,7 +1990,7 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
             saveBtn.style.width = '';
             if (!saveBtn.disabled) updateSaveAvailability();
         }
-    });
+    };
 
     // Кнопка обновления убрана: при переходе в раздел данные подгружаются автоматически
 }
@@ -2048,7 +2040,6 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
     </div>
 
     <div class="form-actions">
-      <button id="eth-save" class="btn primary" type="button">Сохранить</button>
       <div id="eth-hint" class="hint"></div>
     </div>
   `;
@@ -2106,7 +2097,7 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
     // По требованию UI: убираем галочки/бейджи рядом с полями
 
     const hint = byId<HTMLDivElement>('eth-hint');
-    const saveBtn = byId<HTMLButtonElement>('eth-save');
+    const saveBtn = byId<HTMLButtonElement>('if-save-btn');
 
     // Прежняя логика serverBaseline больше не используется — работаем от «последнего сохранения»
 
@@ -2201,7 +2192,7 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
         return null;
     }
 
-    saveBtn.addEventListener('click', async () => {
+    currentSaveAction = async () => {
         if (isOffline()) return;
         hint.textContent = '';
         hint.className = 'hint';
@@ -2239,7 +2230,7 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
             saveBtn.style.width = '';
             if (!saveBtn.disabled) updateSaveAvailability();
         }
-    });
+    };
 
     // Кнопка обновления убрана: при переходе в раздел данные подгружаются автоматически
 }
@@ -2288,7 +2279,6 @@ function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
     </div>
 
     <div class="form-actions">
-      <button id="freedv-save" class="btn primary" type="button">Сохранить</button>
       <div id="freedv-hint" class="hint"></div>
     </div>
   `;
@@ -2300,7 +2290,7 @@ function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
     byId<HTMLSelectElement>('freedv-ldpc').value = initial.ldpc as string;
 
     const hint = byId<HTMLDivElement>('freedv-hint');
-    const saveBtn = byId<HTMLButtonElement>('freedv-save');
+    const saveBtn = byId<HTMLButtonElement>('if-save-btn');
     stabilizeActionButton(saveBtn, 'Сохранение...');
 
     // База «последнее сохранение» для FreeDV — берём текущее начальное состояние формы
@@ -2353,7 +2343,7 @@ function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
     });
     updateSaveAvailability();
 
-    saveBtn.addEventListener('click', async () => {
+    currentSaveAction = async () => {
         const payload = collect();
         const err = validate(payload);
         if (err) {
@@ -2384,5 +2374,5 @@ function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
             saveBtn.style.width = '';
             if (!saveBtn.disabled) updateSaveAvailability();
         }
-    });
+    };
 }
