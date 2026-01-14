@@ -89,6 +89,22 @@ function initUI() {
     const status = document.createElement('div');
     status.id = 'net-status';
     status.className = 'status';
+    const ifSaveBtn = document.createElement('button');
+    ifSaveBtn.id = 'if-save-btn';
+    ifSaveBtn.className = 'btn primary';
+    ifSaveBtn.type = 'button';
+    ifSaveBtn.textContent = 'Сохранить';
+    ifSaveBtn.disabled = true;
+    ifSaveBtn.style.display = 'none';
+    ifSaveBtn.addEventListener('click', async () => {
+        if (currentSectionId === 'interfaces') {
+            await handleInterfacesSave();
+        } else if (currentSaveAction) {
+            await currentSaveAction();
+        }
+    });
+    header.appendChild(ifSaveBtn);
+
     // Кнопки раздела Interfaces (по умолчанию скрыты)
     const ifAddBtn = document.createElement('button');
     ifAddBtn.id = 'if-add-btn';
@@ -111,21 +127,6 @@ function initUI() {
         handleInterfacesDelete();
     });
     header.appendChild(ifDelBtn);
-    const ifSaveBtn = document.createElement('button');
-    ifSaveBtn.id = 'if-save-btn';
-    ifSaveBtn.className = 'btn primary';
-    ifSaveBtn.type = 'button';
-    ifSaveBtn.textContent = 'Сохранить';
-    ifSaveBtn.disabled = true;
-    ifSaveBtn.style.display = 'none';
-    ifSaveBtn.addEventListener('click', async () => {
-        if (currentSectionId === 'interfaces') {
-            await handleInterfacesSave();
-        } else if (currentSaveAction) {
-            await currentSaveAction();
-        }
-    });
-    header.appendChild(ifSaveBtn);
     // Кнопка «Заполнить актуальные данные» — подтягивает текущие значения с устройства
     const fillBtn = document.createElement('button');
     fillBtn.id = 'fill-current-btn';
