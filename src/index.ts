@@ -1,4 +1,8 @@
 import {API, isOffline} from './api';
+import {t, getLang, setLang, Lang, availableLanguages} from './i18n';
+
+const ICON_EYE = 'M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z';
+const ICON_EYE_OFF = 'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.82l2.93 2.93C20.88 15.51 22 13.88 22 12c-1.73-3.89-6-7-11-7-1.25 0-2.43.19-3.54.54l2.72 2.72C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.03 1 12c1.73 3.89 6 7 11 7 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z';
 
 // -----------------------------
 // Настройки режимов автозаполнения
@@ -61,15 +65,27 @@ function initUI() {
 
     const logo = document.createElement('div');
     logo.className = 'logo';
-    logo.textContent = 'RNS Gate — Configurator';
+    logo.textContent = t('app_title');
     sidebar.appendChild(logo);
+
+    const langSelect = document.createElement('select');
+    langSelect.className = 'lang-select sidebar-lang';
+    availableLanguages.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt.value;
+        o.textContent = opt.label;
+        if (getLang() === opt.value) o.selected = true;
+        langSelect.appendChild(o);
+    });
+    langSelect.addEventListener('change', () => setLang(langSelect.value as Lang));
+    sidebar.appendChild(langSelect);
 
     const nav = document.createElement('nav');
     nav.className = 'menu';
     sections.forEach((s, idx) => {
         const btn = document.createElement('button');
         btn.className = 'menu-item' + (idx === 0 ? ' active' : '');
-        btn.textContent = s.title;
+        btn.textContent = t(s.id);
         btn.setAttribute('data-id', s.id);
         btn.addEventListener('click', () => selectSection(s.id));
         nav.appendChild(btn);
@@ -93,7 +109,7 @@ function initUI() {
     ifSaveBtn.id = 'if-save-btn';
     ifSaveBtn.className = 'btn primary';
     ifSaveBtn.type = 'button';
-    ifSaveBtn.textContent = 'Сохранить';
+    ifSaveBtn.textContent = t('save');
     ifSaveBtn.disabled = true;
     ifSaveBtn.style.display = 'none';
     ifSaveBtn.addEventListener('click', async () => {
@@ -110,7 +126,7 @@ function initUI() {
     ifAddBtn.id = 'if-add-btn';
     ifAddBtn.className = 'btn';
     ifAddBtn.type = 'button';
-    ifAddBtn.textContent = 'Добавить';
+    ifAddBtn.textContent = t('add');
     ifAddBtn.style.display = 'none';
     ifAddBtn.addEventListener('click', () => {
         handleInterfacesAdd();
@@ -120,7 +136,7 @@ function initUI() {
     ifDelBtn.id = 'if-del-btn';
     ifDelBtn.className = 'btn danger';
     ifDelBtn.type = 'button';
-    ifDelBtn.textContent = 'Удалить';
+    ifDelBtn.textContent = t('delete');
     ifDelBtn.disabled = true;
     ifDelBtn.style.display = 'none';
     ifDelBtn.addEventListener('click', () => {
@@ -132,8 +148,8 @@ function initUI() {
     fillBtn.id = 'fill-current-btn';
     fillBtn.className = 'btn';
     fillBtn.type = 'button';
-    fillBtn.textContent = 'Заполнить актуальные данные';
-    fillBtn.title = 'Запросить и подставить актуальные значения текущего раздела';
+    fillBtn.textContent = t('fill_actual');
+    fillBtn.title = t('fill_actual_title');
     fillBtn.addEventListener('click', async () => {
         if (!currentSectionId) return;
         try {
@@ -155,15 +171,15 @@ function initUI() {
     });
     header.appendChild(fillBtn);
     // Стабилизируем ширину: учитываем и обычный, и «занятый» текст
-    stabilizeActionButton(fillBtn, 'Обновление...');
+    stabilizeActionButton(fillBtn, t('updating'));
 
     // Кнопка локальной очистки полей текущей формы
     const resetBtn = document.createElement('button');
     resetBtn.id = 'reset-fields-btn';
     resetBtn.className = 'btn';
     resetBtn.type = 'button';
-    resetBtn.textContent = 'Очистить поля';
-    resetBtn.title = 'Очистить значения текущей формы (локально)';
+    resetBtn.textContent = t('clear_fields');
+    resetBtn.title = t('clear_form_title');
     resetBtn.addEventListener('click', () => {
         clearCurrentFormFields();
     });
@@ -238,7 +254,7 @@ function selectSection(id: string) {
         .catch(() => {
             // Ошибка уже отражена в статус-баре, показываем заглушку
             if (bodyEl) {
-                bodyEl.textContent = `Раздел «${section.title}» — здесь позже появятся настройки.`;
+                bodyEl.textContent = `${t(section.id)} ${t('section_placeholder')}`;
             }
         })
         .finally(() => {
@@ -299,34 +315,34 @@ async function loadSectionData(id: string) {
         // для прочих разделов оставляем прежнее поведение (ошибка и заглушка сверху).
         if (id === 'wifi') {
             if (bodyEl) renderWifiForm(undefined);
-            if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
-            else setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
+            if (isOffline()) setStatus('offline', t('offline_cgi_unavailable'));
+            else setStatus('error', `${t('load_error')}: ${e?.message || e}`);
             return; // не пробрасываем, чтобы не перетёрлось содержимое
         } else if (id === 'ethernet') {
             if (bodyEl) renderEthernetForm(undefined);
-            if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
-            else setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
+            if (isOffline()) setStatus('offline', t('offline_cgi_unavailable'));
+            else setStatus('error', `${t('load_error')}: ${e?.message || e}`);
             return;
         } else if (id === 'freedv') {
             if (bodyEl) renderFreeDVForm(undefined);
-            if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
-            else setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
+            if (isOffline()) setStatus('offline', t('offline_cgi_unavailable'));
+            else setStatus('error', `${t('load_error')}: ${e?.message || e}`);
             return;
         } else if (id === 'rnsd') {
             if (bodyEl) renderRnsdConfig(undefined);
-            if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
-            else setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
+            if (isOffline()) setStatus('offline', t('offline_cgi_unavailable'));
+            else setStatus('error', `${t('load_error')}: ${e?.message || e}`);
             return;
         } else if (id === 'interfaces') {
             if (bodyEl) renderInterfacesForm();
-            if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
-            else setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
+            if (isOffline()) setStatus('offline', t('offline_cgi_unavailable'));
+            else setStatus('error', `${t('load_error')}: ${e?.message || e}`);
             return;
         } else {
             if (isOffline()) {
-                setStatus('offline', 'Оффлайн режим: CGI недоступны');
+                setStatus('offline', t('offline_cgi_unavailable'));
             } else {
-                setStatus('error', `Ошибка загрузки: ${e?.message || e}`);
+                setStatus('error', `${t('load_error')}: ${e?.message || e}`);
             }
             throw e;
         }
@@ -334,7 +350,7 @@ async function loadSectionData(id: string) {
 }
 
 function updateStatusBar() {
-    if (isOffline()) setStatus('offline', 'Оффлайн режим: CGI недоступны');
+    if (isOffline()) setStatus('offline', t('offline_cgi_unavailable'));
     else setStatus('ok', '');
 }
 
@@ -386,82 +402,82 @@ const RN_PRESETS: Record<string, { bw: number, sf: number, cr: number }> = {
 const INTERFACE_TYPES: TypeDef[] = [
     {
         value: 'tcp_client',
-        label: 'TCP Client',
+        label: t('label_tcp_client'),
         fields: [
-            { key: 'host', label: 'Host', type: 'text', default: '' },
-            { key: 'port', label: 'Port', type: 'number', default: 5000 },
+            { key: 'host', label: t('label_host'), type: 'text', default: '' },
+            { key: 'port', label: t('label_port'), type: 'number', default: 5000 },
         ],
     },
     {
         value: 'tcp_server',
-        label: 'TCP Server',
+        label: t('label_tcp_server'),
         fields: [
-            { key: 'bind_host', label: 'Bind host', type: 'text', default: '0.0.0.0' },
-            { key: 'port', label: 'Port', type: 'number', default: 5000 },
+            { key: 'bind_host', label: t('label_bind_host'), type: 'text', default: '0.0.0.0' },
+            { key: 'port', label: t('label_port'), type: 'number', default: 5000 },
         ],
     },
     {
         value: 'rnode',
-        label: 'RNode',
+        label: t('label_rnode'),
         fields: [
-            { key: 'serial', label: 'Serial Port', type: 'text', default: '/dev/ttyUSB0' },
-            { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
-            { key: 'preset', label: 'Radio Preset', type: 'select', default: 'не выбран', options: ['не выбран', ...Object.keys(RN_PRESETS)] },
-            { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 868 },
+            { key: 'serial', label: t('label_serial_port'), type: 'text', default: '/dev/ttyUSB0' },
+            { key: 'tx_power', label: t('label_tx_power'), type: 'number', default: 20 },
+            { key: 'preset', label: t('label_radio_preset'), type: 'select', default: t('not_selected'), options: [t('not_selected'), ...Object.keys(RN_PRESETS)] },
+            { key: 'frequency', label: t('label_frequency'), type: 'number', default: 868 },
             {
                 key: 'bandwidth',
-                label: 'Bandwidth (kHz)',
+                label: t('label_bandwidth'),
                 type: 'select',
                 default: 125,
                 options: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
             },
-            { key: 'coding_rate', label: 'Coding Rate', type: 'select', default: 5, options: ['5', '6', '7', '8'] },
-            { key: 'spread_factor', label: 'Spread Factor', type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
+            { key: 'coding_rate', label: t('label_coding_rate'), type: 'select', default: 5, options: ['5', '6', '7', '8'] },
+            { key: 'spread_factor', label: t('label_spread_factor'), type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
         ],
     },
     {
         value: 'freedv',
-        label: 'FreeDV',
+        label: t('label_freedv'),
         fields: [
-            { key: 'mode', label: 'Mode', type: 'select', default: 'FSK2', options: ['FSK2', 'FSK4'] },
-            { key: 'rate', label: 'Rate', type: 'select', default: '500', options: ['500','200','100','50','20'] },
-            { key: 'ldpc', label: 'LDPC', type: 'select', default: '768/256', options: ['768/256','512/256'] },
+            { key: 'mode', label: t('label_mode'), type: 'select', default: 'FSK2', options: ['FSK2', 'FSK4'] },
+            { key: 'rate', label: t('label_rate'), type: 'select', default: '500', options: ['500','200','100','50','20'] },
+            { key: 'ldpc', label: t('label_ldpc'), type: 'select', default: '768/256', options: ['768/256','512/256'] },
         ],
     },
     {
         value: 'loraspi',
-        label: 'LoraSPI',
+        label: t('label_loraspi'),
         fields: [
-            { key: 'spi_chip', label: 'SPI Chip', type: 'text', default: 'spi0' },
-            { key: 'spi_pin', label: 'SPI Pin', type: 'number', default: 0 },
+            { key: 'spi_chip', label: t('label_spi_chip'), type: 'text', default: 'spi0' },
+            { key: 'spi_pin', label: t('label_spi_pin'), type: 'number', default: 0 },
 
-            { key: 'irq_chip', label: 'IRQ Chip', type: 'text', default: 'gpiochip1' },
-            { key: 'irq_pin', label: 'IRQ Pin', type: 'text', default: '' },
+            { key: 'irq_chip', label: t('label_irq_chip'), type: 'text', default: 'gpiochip1' },
+            { key: 'irq_pin', label: t('label_irq_pin'), type: 'text', default: '' },
 
-            { key: 'busy_chip', label: 'Busy Chip', type: 'text', default: 'gpiochip1' },
-            { key: 'busy_pin', label: 'Busy Pin', type: 'text', default: '' },
+            { key: 'busy_chip', label: t('label_busy_chip'), type: 'text', default: 'gpiochip1' },
+            { key: 'busy_pin', label: t('label_busy_pin'), type: 'text', default: '' },
 
-            { key: 'nrst_chip', label: 'NRST Chip', type: 'text', default: 'gpiochip1' },
-            { key: 'nrst_pin', label: 'NRST Pin', type: 'text', default: '' },
+            { key: 'nrst_chip', label: t('label_nrst_chip'), type: 'text', default: 'gpiochip1' },
+            { key: 'nrst_pin', label: t('label_nrst_pin'), type: 'text', default: '' },
 
-            { key: 'txen_chip', label: 'TX EN Chip', type: 'text', default: 'gpiochip1' },
-            { key: 'txen_pin', label: 'TX EN Pin', type: 'text', default: '' },
+            { key: 'txen_chip', label: t('label_tx_en_chip'), type: 'text', default: 'gpiochip1' },
+            { key: 'txen_pin', label: t('label_tx_en_pin'), type: 'text', default: '' },
 
-            { key: 'rxen_chip', label: 'RX EN Chip', type: 'text', default: 'gpiochip1' },
-            { key: 'rxen_pin', label: 'RX EN Pin', type: 'text', default: '' },
+            { key: 'rxen_chip', label: t('label_rx_en_chip'), type: 'text', default: 'gpiochip1' },
+            { key: 'rxen_pin', label: t('label_rx_en_pin'), type: 'text', default: '' },
 
-            { key: 'tx_power', label: 'TX Power (dBm)', type: 'number', default: 20 },
-            { key: 'preset', label: 'Radio Preset', type: 'select', default: 'не выбран', options: ['не выбран', ...Object.keys(RN_PRESETS)] },
-            { key: 'frequency', label: 'Frequency (MHz)', type: 'number', default: 868 },
+            { key: 'tx_power', label: t('label_tx_power'), type: 'number', default: 20 },
+            { key: 'preset', label: t('label_radio_preset'), type: 'select', default: t('not_selected'), options: [t('not_selected'), ...Object.keys(RN_PRESETS)] },
+            { key: 'frequency', label: t('label_frequency'), type: 'number', default: 868 },
             {
                 key: 'bandwidth',
-                label: 'Bandwidth (kHz)',
+                label: t('label_bandwidth'),
                 type: 'select',
                 default: 125,
                 options: ['7.8', '10.4', '15.6', '20.8', '31.25', '41.7', '62.5', '125', '250', '500', '1625']
             },
-            { key: 'coding_rate', label: 'Coding Rate', type: 'select', default: 5, options: ['5', '6', '7', '8'] },
-            { key: 'spread_factor', label: 'Spread Factor', type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
+            { key: 'coding_rate', label: t('label_coding_rate'), type: 'select', default: 5, options: ['5', '6', '7', '8'] },
+            { key: 'spread_factor', label: t('label_spread_factor'), type: 'select', default: 7, options: ['5', '6', '7', '8', '9', '10', '11', '12'] },
         ]
 
     },
@@ -551,7 +567,7 @@ function renderInterfacesForm() {
     if (!list.length) {
         const empty = document.createElement('div');
         empty.className = 'form-section';
-        empty.innerHTML = '<div class="form-title">Интерфейсы</div><div>Интерфейсы не добавлены. Нажмите «Добавить».</div>';
+        empty.innerHTML = `<div class="form-title">${t('interfaces')}</div><div>${t('no_interfaces_added')}</div>`;
         form.appendChild(empty);
         body.appendChild(form);
         return;
@@ -560,18 +576,18 @@ function renderInterfacesForm() {
     // Секция со списком интерфейсов
     const secList = document.createElement('div');
     secList.className = 'form-section';
-    secList.innerHTML = '<div class="form-title">Список интерфейсов</div>';
+    secList.innerHTML = `<div class="form-title">${t('interfaces_list')}</div>`;
     const gridList = document.createElement('div');
     gridList.className = 'form-grid';
     const labSel = document.createElement('label');
     labSel.setAttribute('for', 'if-select');
-    labSel.textContent = 'Интерфейс';
+    labSel.textContent = t('interface');
     const sel = document.createElement('select');
     sel.id = 'if-select';
     list.forEach((it) => {
         const opt = document.createElement('option');
         opt.value = it.id;
-        opt.textContent = `${it.name || '(без имени)'} — ${typeLabel(it.type)}`;
+        opt.textContent = `${it.name || `(${t('no_name')})`} — ${typeLabel(it.type)}`;
         if (it.id === curId) opt.selected = true;
         sel.appendChild(opt);
     });
@@ -596,7 +612,7 @@ function renderInterfacesForm() {
     gridName.className = 'form-grid';
     const labName = document.createElement('label');
     labName.setAttribute('for', 'if-name');
-    labName.textContent = 'Имя интерфейса';
+    labName.textContent = t('interface_name');
     const inputName = document.createElement('input');
     inputName.id = 'if-name';
     inputName.type = 'text';
@@ -611,7 +627,7 @@ function renderInterfacesForm() {
         // Обновим option в селекте
         for (const o of Array.from(sel.options)) {
             if (o.value === cur.id) {
-                o.textContent = `${item.name || '(без имени)'} — ${typeLabel(item.type)}`;
+                o.textContent = `${item.name || `(${t('no_name')})`} — ${typeLabel(item.type)}`;
                 break;
             }
         }
@@ -629,7 +645,7 @@ function renderInterfacesForm() {
     gridType.className = 'form-grid';
     const labType = document.createElement('label');
     labType.setAttribute('for', 'if-type');
-    labType.textContent = 'Тип';
+    labType.textContent = t('type');
     const selType = document.createElement('select');
     selType.id = 'if-type';
     INTERFACE_TYPES.forEach(t => {
@@ -649,7 +665,7 @@ function renderInterfacesForm() {
         // Обновим текст опции в списке интерфейсов
         for (const o of Array.from(sel.options)) {
             if (o.value === cur.id) {
-                o.textContent = `${item.name || '(без имени)'} — ${typeLabel(item.type)}`;
+                o.textContent = `${item.name || `(${t('no_name')})`} — ${typeLabel(item.type)}`;
                 break;
             }
         }
@@ -667,7 +683,7 @@ function renderInterfacesForm() {
     secSet.className = 'form-section';
     const titleSet = document.createElement('div');
     titleSet.className = 'form-title';
-    titleSet.textContent = 'Настройки типа';
+    titleSet.textContent = t('type_settings');
     const contSet = document.createElement('div');
     contSet.id = 'if-settings';
     secSet.appendChild(titleSet);
@@ -762,7 +778,7 @@ function renderInterfacesForm() {
                 // Для текстовых пинов (IRQ/Busy/NRST/TX EN/RX EN) показываем явный плейсхолдер
                 // «номер или имя», даже если дефолта нет. Для числовых — сохраняем прежнюю логику.
                 pinInp.placeholder = r.pinType === 'text'
-                    ? 'номер или имя'
+                    ? t('num_or_name')
                     : (pinDefault === undefined || pinDefault === null ? '' : String(pinDefault));
                 if (
                     pinStored === undefined || pinStored === null ||
@@ -875,9 +891,9 @@ function renderInterfacesForm() {
                 // Если вручную меняем параметры радио — сбрасываем пресет
                 if ((item.type === 'rnode' || item.type === 'loraspi') && ['bandwidth', 'coding_rate', 'spread_factor'].includes(f.key)) {
                     if (it.settings['preset'] !== undefined) {
-                        it.settings['preset'] = 'не выбран';
+                        it.settings['preset'] = t('not_selected');
                         const preSel = byId<HTMLSelectElement>('if-field-preset');
-                        if (preSel) preSel.value = 'не выбран';
+                        if (preSel) preSel.value = t('not_selected');
                     }
                 }
 
@@ -954,7 +970,7 @@ async function handleInterfacesSave() {
     try {
         if (isOffline()) throw new Error('offline');
         await API.postForm('/interfaces/apply', { payload: JSON.stringify(list) });
-        setStatus('ok', 'Интерфейсы сохранены');
+        setStatus('ok', t('interfaces_saved'));
         // Обновляем baseline последнего сохранения
         try {
             interfacesBaselineJSON = JSON.stringify(list);
@@ -962,9 +978,9 @@ async function handleInterfacesSave() {
         } catch {}
     } catch (e: any) {
         if (e && String(e.message || e) === 'offline') {
-            setStatus('offline', 'Оффлайн режим: сохранение на устройстве недоступно');
+            setStatus('offline', t('offline_save_unavailable'));
         } else {
-            setStatus('error', `Ошибка сохранения: ${e?.message || e}`);
+            setStatus('error', `${t('save_error')}: ${e?.message || e}`);
         }
     } finally {
         updateInterfacesHeaderUI();
@@ -1016,13 +1032,13 @@ function applyIndicator(kind: StatusKind, text: string) {
     el.textContent = '';
     // Tooltip у индикатора
     if (kind === 'ok') {
-        el.setAttribute('title', 'Онлайн');
+        el.setAttribute('title', t('online'));
     } else if (kind === 'offline') {
-        el.setAttribute('title', hasText ? text.trim() : 'Оффлайн');
+        el.setAttribute('title', hasText ? text.trim() : t('offline'));
     } else if (kind === 'error') {
-        el.setAttribute('title', hasText ? text.trim() : 'Ошибка');
+        el.setAttribute('title', hasText ? text.trim() : t('error'));
     } else if (kind === 'busy') {
-        el.setAttribute('title', hasText ? text.trim() : 'Выполняется запрос…');
+        el.setAttribute('title', hasText ? text.trim() : t('requesting'));
     } else {
         el.removeAttribute('title');
     }
@@ -1439,7 +1455,7 @@ function renderRnsdConfig(data: unknown | undefined) {
         else if (parts.raw && typeof parts.raw === 'object') {
             try { rnsdPre.textContent = JSON.stringify(parts.raw, null, 2); } catch { rnsdPre.textContent = String(parts.raw); }
         } else {
-            rnsdPre.textContent = 'Нет данных о RNSD.';
+            rnsdPre.textContent = t('no_rnsd_data');
         }
     } else if (typeof parts.rnsd === 'string') {
         rnsdPre.textContent = parts.rnsd;
@@ -1561,23 +1577,23 @@ function renderRnsdConfig(data: unknown | undefined) {
 
       <div class="gpio-row-title">IRQ</div>
       <input id="gpio-irq-chip" type="text" inputmode="text" placeholder="gpiochip1">
-      <input id="gpio-irq-pin" type="text" inputmode="text" placeholder="номер или имя">
+      <input id="gpio-irq-pin" type="text" inputmode="text" placeholder="${t("num_or_name")}">
 
       <div class="gpio-row-title">Busy</div>
       <input id="gpio-busy-chip" type="text" inputmode="text" placeholder="gpiochip1">
-      <input id="gpio-busy-pin" type="text" inputmode="text" placeholder="номер или имя">
+      <input id="gpio-busy-pin" type="text" inputmode="text" placeholder="${t("num_or_name")}">
 
       <div class="gpio-row-title">NRST</div>
       <input id="gpio-nrst-chip" type="text" inputmode="text" placeholder="gpiochip1">
-      <input id="gpio-nrst-pin" type="text" inputmode="text" placeholder="номер или имя">
+      <input id="gpio-nrst-pin" type="text" inputmode="text" placeholder="${t("num_or_name")}">
 
       <div class="gpio-row-title">TX EN</div>
       <input id="gpio-tx-en-chip" type="text" inputmode="text" placeholder="gpiochip1">
-      <input id="gpio-tx-en-pin" type="text" inputmode="text" placeholder="номер или имя">
+      <input id="gpio-tx-en-pin" type="text" inputmode="text" placeholder="${t("num_or_name")}">
 
       <div class="gpio-row-title">RX EN</div>
       <input id="gpio-rx-en-chip" type="text" inputmode="text" placeholder="gpiochip1">
-      <input id="gpio-rx-en-pin" type="text" inputmode="text" placeholder="номер или имя">
+      <input id="gpio-rx-en-pin" type="text" inputmode="text" placeholder="${t("num_or_name")}">
     </div>
   `;
     spiBox.appendChild(grid);
@@ -1702,21 +1718,21 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     <div class="form-section">
       <div class="form-title">WiFi</div>
       <div class="form-grid">
-        <label for="wifi-mode">Режим</label>
+        <label for="wifi-mode">${t('mode')}</label>
         <select id="wifi-mode">
-          <option value="client">Клиент</option>
-          <option value="ap">Точка доступа</option>
+          <option value="client">${t('client')}</option>
+          <option value="ap">${t('ap')}</option>
         </select>
 
         <label for="wifi-ssid">SSID</label>
-        <input id="wifi-ssid" type="text" placeholder="Имя сети">
+        <input id="wifi-ssid" type="text" placeholder="${t('ssid')}">
 
-        <label for="wifi-pass">Пароль</label>
+        <label for="wifi-pass">${t('password_label')}</label>
         <div class="input-with-icon">
-          <input id="wifi-pass" type="password" placeholder="Пароль (WPA2)" autocomplete="current-password">
-          <button id="wifi-pass-toggle" type="button" class="icon-btn" aria-pressed="false" aria-label="Показать пароль" title="Показать пароль">
+          <input id="wifi-pass" type="password" placeholder="${t('password')}" autocomplete="current-password">
+          <button id="wifi-pass-toggle" type="button" class="icon-btn" aria-pressed="false" aria-label="${t('show_pass')}" title="${t('show_pass')}">
             <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+              <path d="${ICON_EYE}" />
             </svg>
           </button>
         </div>
@@ -1724,21 +1740,21 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     </div>
 
     <div class="form-section">
-      <div class="form-title">IP-настройки</div>
+      <div class="form-title">${t('ip_settings')}</div>
       <div class="form-grid">
-        <label for="wifi-ipcfg">Режим адресации</label>
+        <label for="wifi-ipcfg">${t('address_mode')}</label>
         <select id="wifi-ipcfg">
           <option value="dhcp">DHCP</option>
-          <option value="static">Статический</option>
+          <option value="static">${t('static')}</option>
         </select>
 
-        <label for="wifi-ip">IP адрес</label>
+        <label for="wifi-ip">${t('ip_address')}</label>
         <input id="wifi-ip" type="text" placeholder="192.168.1.10">
 
-        <label for="wifi-mask">Маска</label>
+        <label for="wifi-mask">${t('mask')}</label>
         <input id="wifi-mask" type="text" placeholder="255.255.255.0">
 
-        <label for="wifi-gw">Шлюз</label>
+        <label for="wifi-gw">${t('gateway')}</label>
         <input id="wifi-gw" type="text" placeholder="192.168.1.1">
 
         <label for="wifi-dns1">DNS 1</label>
@@ -1822,13 +1838,19 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     const passInput = byId<HTMLInputElement>('wifi-pass');
     const passToggle = document.getElementById('wifi-pass-toggle') as HTMLButtonElement | null;
     if (passToggle) {
+        const passIconPath = passToggle.querySelector('path');
         passToggle.addEventListener('click', () => {
             const toShow = passInput.type === 'password';
             passInput.type = toShow ? 'text' : 'password';
             passToggle.setAttribute('aria-pressed', String(toShow));
-            passToggle.setAttribute('aria-label', toShow ? 'Скрыть пароль' : 'Показать пароль');
-            passToggle.setAttribute('title', toShow ? 'Скрыть пароль' : 'Показать пароль');
+            passToggle.setAttribute('aria-label', toShow ? t('hide_pass') : t('show_pass'));
+            passToggle.setAttribute('title', toShow ? t('hide_pass') : t('show_pass'));
             passToggle.classList.toggle('active', toShow);
+
+            if (passIconPath) {
+                passIconPath.setAttribute('d', toShow ? ICON_EYE_OFF : ICON_EYE);
+            }
+
             // Вернём фокус в поле и установим курсор в конец
             try {
                 passInput.focus({ preventScroll: true });
@@ -1844,7 +1866,7 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     // Ранее использовался serverBaseline; теперь работаем от «последнего сохранения»
 
     // Стабилизация ширины кнопки «Сохранить», чтобы текст «Сохранение…» не менял лэйаут
-    stabilizeActionButton(saveBtn, 'Сохранение...');
+    stabilizeActionButton(saveBtn, t('saving'));
 
     // Валидация доступности сохранения: разрешаем только если есть дифф относительно последнего сохранения
     const normalizeWifi = (v: WifiInfo): WifiInfo => {
@@ -1905,7 +1927,7 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     const updateSaveAvailability = () => {
         if (isOffline()) {
             saveBtn.disabled = true;
-            hint.textContent = 'Оффлайн режим — сохранение недоступно';
+            hint.textContent = t('offline_save_unavailable_short');
             hint.className = 'hint warn';
             return;
         }
@@ -1918,7 +1940,7 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     // Изначально кнопка отключена, дальше управление берёт updateSaveAvailability
     saveBtn.disabled = true;
     if (isOffline()) {
-        hint.textContent = 'Оффлайн режим — сохранение недоступно';
+        hint.textContent = t('offline_save_unavailable_short');
         hint.className = 'hint warn';
     }
     // Изменения формы проверяем на дифф
@@ -1941,14 +1963,14 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     updateSaveAvailability();
 
     function validate(v: WifiInfo): string | null {
-        if (!v.ssid || v.ssid.trim().length === 0) return 'Укажите SSID';
-        if (v.mode === 'client' && (!v.password || v.password.length < 8)) return 'Пароль не короче 8 символов';
+        if (!v.ssid || v.ssid.trim().length === 0) return t('specify_ssid');
+        if (v.mode === 'client' && (!v.password || v.password.length < 8)) return t('pass_too_short');
         if (v.ip_config === 'static') {
-            if (!isValidIp(v.ip)) return 'Некорректный IP адрес';
-            if (!isValidIp(v.netmask)) return 'Некорректная маска';
-            if (v.gateway && !isValidIp(v.gateway)) return 'Некорректный шлюз';
-            if (v.dns1 && !isValidIp(v.dns1)) return 'Некорректный DNS1';
-            if (v.dns2 && !isValidIp(v.dns2)) return 'Некорректный DNS2';
+            if (!isValidIp(v.ip)) return t('invalid_ip');
+            if (!isValidIp(v.netmask)) return t('invalid_mask');
+            if (v.gateway && !isValidIp(v.gateway)) return t('invalid_gw');
+            if (v.dns1 && !isValidIp(v.dns1)) return t('invalid_dns1');
+            if (v.dns2 && !isValidIp(v.dns2)) return t('invalid_dns2');
         }
         return null;
     }
@@ -1968,26 +1990,26 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
         try {
             const w = saveBtn.offsetWidth; if (w) saveBtn.style.width = `${w}px`;
             saveBtn.disabled = true;
-            saveBtn.textContent = 'Сохранение...';
+            saveBtn.textContent = t('saving');
             setStatus('busy', '');
             await API.postForm('/wifi/apply', payload as any);
             // Сохраним локальный профиль
             saveLocalProfile('wifi', payload);
-            hint.textContent = 'Изменения отправлены.';
+            hint.textContent = t('saved');
             hint.className = 'hint success';
-            setStatus('ok', 'Настройки WiFi применены');
+            setStatus('ok', t('wifi_applied'));
             // Обновляем baseline «последнее сохранение» — дифф обнуляется
             lastSaved = { ...payload } as WifiInfo;
             savedOk = true;
         } catch (e: any) {
-            hint.textContent = `Ошибка сохранения: ${e?.message || e}`;
+            hint.textContent = `${t('save_error')}: ${e?.message || e}`;
             hint.className = 'hint error';
-            setStatus('error', 'Ошибка сохранения WiFi');
+            setStatus('error', t('wifi_save_error'));
         } finally {
             // После успешного сохранения снова блокируем кнопку «Сохранить».
             // После ошибки оставляем разблокированной (если не оффлайн), чтобы можно было повторить.
             saveBtn.disabled = isOffline() || savedOk;
-            saveBtn.textContent = 'Сохранить';
+            saveBtn.textContent = t('save');
             saveBtn.style.width = '';
             if (!saveBtn.disabled) updateSaveAvailability();
         }
@@ -2017,19 +2039,19 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
     <div class="form-section">
       <div class="form-title">Ethernet</div>
       <div class="form-grid">
-        <label for="eth-ipcfg">Режим адресации</label>
+        <label for="eth-ipcfg">${t('address_mode')}</label>
         <select id="eth-ipcfg">
           <option value="dhcp">DHCP</option>
-          <option value="static">Статический</option>
+          <option value="static">${t('static')}</option>
         </select>
 
-        <label for="eth-ip">IP адрес</label>
+        <label for="eth-ip">${t('ip_address')}</label>
         <input id="eth-ip" type="text" placeholder="192.168.1.10">
 
-        <label for="eth-mask">Маска</label>
+        <label for="eth-mask">${t('mask')}</label>
         <input id="eth-mask" type="text" placeholder="255.255.255.0">
 
-        <label for="eth-gw">Шлюз</label>
+        <label for="eth-gw">${t('gateway')}</label>
         <input id="eth-gw" type="text" placeholder="192.168.1.1">
 
         <label for="eth-dns1">DNS 1</label>
@@ -2103,7 +2125,7 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
     // Прежняя логика serverBaseline больше не используется — работаем от «последнего сохранения»
 
     // Стабилизация ширины кнопки Ethernet «Сохранить»
-    stabilizeActionButton(saveBtn, 'Сохранение...');
+    stabilizeActionButton(saveBtn, t('saving'));
 
     // Проверка диффа для Ethernet
     const normalizeEth = (v: EthernetInfo): EthernetInfo => {
@@ -2152,7 +2174,7 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
     const updateSaveAvailability = () => {
         if (isOffline()) {
             saveBtn.disabled = true;
-            hint.textContent = 'Оффлайн режим — сохранение недоступно';
+            hint.textContent = t('offline_save_unavailable_short');
             hint.className = 'hint warn';
             return;
         }
@@ -2164,7 +2186,7 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
     // Стартовое состояние
     saveBtn.disabled = true;
     if (isOffline()) {
-        hint.textContent = 'Оффлайн режим — сохранение недоступно';
+        hint.textContent = t('offline_save_unavailable_short');
         hint.className = 'hint warn';
     }
     form.addEventListener('input', updateSaveAvailability);
@@ -2184,11 +2206,11 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
 
     function validate(v: EthernetInfo): string | null {
         if (v.ip_config === 'static') {
-            if (!isValidIp(v.ip)) return 'Некорректный IP адрес';
-            if (!isValidIp(v.netmask)) return 'Некорректная маска';
-            if (v.gateway && !isValidIp(v.gateway)) return 'Некорректный шлюз';
-            if (v.dns1 && !isValidIp(v.dns1)) return 'Некорректный DNS1';
-            if (v.dns2 && !isValidIp(v.dns2)) return 'Некорректный DNS2';
+            if (!isValidIp(v.ip)) return t('invalid_ip');
+            if (!isValidIp(v.netmask)) return t('invalid_mask');
+            if (v.gateway && !isValidIp(v.gateway)) return t('invalid_gw');
+            if (v.dns1 && !isValidIp(v.dns1)) return t('invalid_dns1');
+            if (v.dns2 && !isValidIp(v.dns2)) return t('invalid_dns2');
         }
         return null;
     }
@@ -2208,26 +2230,26 @@ function renderEthernetForm(info?: Partial<EthernetInfo>) {
         try {
             const w = saveBtn.offsetWidth; if (w) saveBtn.style.width = `${w}px`;
             saveBtn.disabled = true;
-            saveBtn.textContent = 'Сохранение...';
+            saveBtn.textContent = t('saving');
             setStatus('busy', '');
             await API.postForm('/ethernet/apply', payload as any);
             // Сохраним локальный профиль
             saveLocalProfile('ethernet', payload);
-            hint.textContent = 'Изменения отправлены.';
+            hint.textContent = t('saved');
             hint.className = 'hint success';
-            setStatus('ok', 'Настройки Ethernet применены');
+            setStatus('ok', t('eth_applied'));
             // Обновляем базу «последнее сохранение», чтобы сбросить дифф
             lastSavedEth = { ...payload } as EthernetInfo;
             savedOk = true;
         } catch (e: any) {
-            hint.textContent = `Ошибка сохранения: ${e?.message || e}`;
+            hint.textContent = `${t('save_error')}: ${e?.message || e}`;
             hint.className = 'hint error';
-            setStatus('error', 'Ошибка сохранения Ethernet');
+            setStatus('error', t('eth_save_error'));
         } finally {
             // После успешного сохранения снова блокируем кнопку «Сохранить».
             // После ошибки оставляем разблокированной (если не оффлайн), чтобы можно было повторить.
             saveBtn.disabled = isOffline() || savedOk;
-            saveBtn.textContent = 'Сохранить';
+            saveBtn.textContent = t('save');
             saveBtn.style.width = '';
             if (!saveBtn.disabled) updateSaveAvailability();
         }
@@ -2292,7 +2314,7 @@ function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
 
     const hint = byId<HTMLDivElement>('freedv-hint');
     const saveBtn = byId<HTMLButtonElement>('if-save-btn');
-    stabilizeActionButton(saveBtn, 'Сохранение...');
+    stabilizeActionButton(saveBtn, t('saving'));
 
     // База «последнее сохранение» для FreeDV — берём текущее начальное состояние формы
     let lastSavedFree: Required<Pick<FreeDVInfo, 'mode' | 'rate' | 'ldpc'>> = { ...initial } as any;
@@ -2309,9 +2331,9 @@ function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
         const modes = ['FSK2', 'FSK4'];
         const rates = ['500','200','100','50','20'];
         const ldpcl = ['768/256','512/256'];
-        if (!modes.includes(String(v.mode))) return 'Недопустимый Mode';
-        if (!rates.includes(String(v.rate))) return 'Недопустимый Rate';
-        if (!ldpcl.includes(String(v.ldpc))) return 'Недопустимый LDPC';
+        if (!modes.includes(String(v.mode))) return t('invalid_mode');
+        if (!rates.includes(String(v.rate))) return t('invalid_rate');
+        if (!ldpcl.includes(String(v.ldpc))) return t('invalid_ldpc');
         return null;
     }
 
@@ -2330,7 +2352,7 @@ function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
             hint.textContent = err;
             hint.className = 'hint error';
         } else if (isDifferentFromBaseline(cur)) {
-            hint.textContent = 'Есть несохранённые изменения';
+            hint.textContent = t('unsaved_changes');
             hint.className = 'hint';
         } else {
             hint.textContent = '';
@@ -2356,22 +2378,22 @@ function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
         try {
             const w = saveBtn.offsetWidth; if (w) saveBtn.style.width = `${w}px`;
             saveBtn.disabled = true;
-            saveBtn.textContent = 'Сохранение...';
+            saveBtn.textContent = t('saving');
             setStatus('busy', '');
             await API.postForm('/freedv/apply', payload as any);
-            hint.textContent = 'Изменения отправлены.';
+            hint.textContent = t('saved');
             hint.className = 'hint success';
-            setStatus('ok', 'Настройки FreeDV применены');
+            setStatus('ok', t('freedv_applied'));
             // Обновляем «последнее сохранение»
             lastSavedFree = { ...payload } as any;
             savedOk = true;
         } catch (e: any) {
-            hint.textContent = `Ошибка сохранения: ${e?.message || e}`;
+            hint.textContent = `${t('save_error')}: ${e?.message || e}`;
             hint.className = 'hint error';
-            setStatus('error', 'Ошибка сохранения FreeDV');
+            setStatus('error', t('freedv_save_error'));
         } finally {
             saveBtn.disabled = isOffline() || savedOk;
-            saveBtn.textContent = 'Сохранить';
+            saveBtn.textContent = t('save');
             saveBtn.style.width = '';
             if (!saveBtn.disabled) updateSaveAvailability();
         }

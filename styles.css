@@ -604,6 +604,22 @@ body {
 .hint.success { color: #166534; } /* green-800 */
 .hint.warn { color: #7c2d12; } /* orange-900 */
 
+.lang-select {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sidebar-lang {
+  margin: 12px 16px;
+  background: #1e293b;
+  color: #f8fafc;
+  border-color: #334155;
+}
+
 /* Small screens */
 @media (max-width: 720px) {
   .sidebar { width: 200px; }
