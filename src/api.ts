@@ -10,6 +10,13 @@
 
 export type Dict = Record<string, string | number | boolean | null | undefined>;
 
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 // Определяем базовый путь до CGI. Можно переопределить глобально через window.CGI_BASE
 function detectBase(): string {
   try {
@@ -67,10 +74,15 @@ export type ApiOptions = {
 class ApiClient {
   private baseUrl: string;
   private timeoutMs: number;
+  private onUnauthorizedCb?: () => void;
 
   constructor(opts?: ApiOptions) {
     this.baseUrl = opts?.baseUrl ?? detectBase();
     this.timeoutMs = opts?.timeoutMs ?? 8000;
+  }
+
+  onUnauthorized(cb: () => void) {
+    this.onUnauthorizedCb = cb;
   }
 
   async get<T = unknown>(path: string, params?: Dict): Promise<T> {
@@ -107,7 +119,11 @@ class ApiClient {
         const msg = [`HTTP ${r.status}${r.statusText ? ' ' + r.statusText : ''}`, details ? `— ${details}` : '', `at ${url}`]
           .filter(Boolean)
           .join(' ');
-        throw new Error(msg);
+
+        if (r.status === 401 && this.onUnauthorizedCb) {
+          this.onUnauthorizedCb();
+        }
+        throw new ApiError(r.status, msg);
       }
       const ct = r.headers.get('content-type') || '';
       if (ct.includes('application/json')) return r.json() as Promise<T>;
@@ -156,7 +172,11 @@ class ApiClient {
         const msg = [`HTTP ${r.status}${r.statusText ? ' ' + r.statusText : ''}`, details ? `— ${details}` : '', `at ${url}`]
           .filter(Boolean)
           .join(' ');
-        throw new Error(msg);
+
+        if (r.status === 401 && this.onUnauthorizedCb) {
+          this.onUnauthorizedCb();
+        }
+        throw new ApiError(r.status, msg);
       }
       const ct = r.headers.get('content-type') || '';
       if (ct.includes('application/json')) return r.json() as Promise<T>;

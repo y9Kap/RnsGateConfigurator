@@ -1,5 +1,6 @@
 import {API, isOffline} from './api';
 import {t, getLang, setLang, Lang, availableLanguages} from './i18n';
+import {Auth} from './auth';
 
 const ICON_EYE = 'M12 5c-5 0-9.27 3.11-11 7 1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z';
 const ICON_EYE_OFF = 'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.82l2.93 2.93C20.88 15.51 22 13.88 22 12c-1.73-3.89-6-7-11-7-1.25 0-2.43.19-3.54.54l2.72 2.72C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.03 1 12c1.73 3.89 6 7 11 7 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z';
@@ -51,6 +52,14 @@ const sections: Section[] = [
     { id: 'ethernet', title: 'Ethernet' },
 ];
 
+function getVisibleSections(): Section[] {
+    const list = [...sections];
+    if (Auth.getInstance().isAdmin()) {
+        list.push({ id: 'users', title: t('users') });
+    }
+    return list;
+}
+
 function initUI() {
     const app = document.getElementById('app');
     if (!app) return;
@@ -82,10 +91,10 @@ function initUI() {
 
     const nav = document.createElement('nav');
     nav.className = 'menu';
-    sections.forEach((s, idx) => {
+    getVisibleSections().forEach((s, idx) => {
         const btn = document.createElement('button');
         btn.className = 'menu-item' + (idx === 0 ? ' active' : '');
-        btn.textContent = t(s.id);
+        btn.textContent = t(s.id) || s.title;
         btn.setAttribute('data-id', s.id);
         btn.addEventListener('click', () => selectSection(s.id));
         nav.appendChild(btn);
@@ -218,7 +227,7 @@ function selectSection(id: string) {
     });
 
     // Update right panel content
-    const section = sections.find((s) => s.id === id) ?? sections[0];
+    const section = getVisibleSections().find((s) => s.id === id) ?? sections[0];
     const titleEl = document.getElementById('section-title');
     const bodyEl = document.getElementById('content-body');
     if (titleEl) titleEl.textContent = section.title;
@@ -300,6 +309,8 @@ async function loadSectionData(id: string) {
                     localStorage.setItem(IF_BASELINE_KEY, interfacesBaselineJSON);
                 }
                 renderInterfacesForm();
+            } else if (id === 'users') {
+                renderUsersForm(data as any);
             } else {
                 const pre = document.createElement('pre');
                 pre.className = 'code';
@@ -914,7 +925,18 @@ function updateInterfacesHeaderUI() {
     const list = ifLoadAll();
     const curId = ifGetCurrentId();
     const hasCur = !!curId && list.some(i => i.id === curId);
-    if (addBtn) addBtn.disabled = false;
+
+    if (addBtn) {
+        const isAdmin = Auth.getInstance().isAdmin();
+        if (!isAdmin && list.length >= 1) {
+            addBtn.disabled = true;
+            addBtn.title = t('limit_one_config');
+        } else {
+            addBtn.disabled = false;
+            addBtn.title = '';
+        }
+    }
+
     if (delBtn) delBtn.disabled = !hasCur;
     if (saveBtn) {
         // Инициализируем baseline из localStorage или текущим состоянием (если нет сохранений)
@@ -1080,11 +1102,15 @@ function setStatus(kind: StatusKind, text: string) {
     scheduleIndicator(kind, text);
 }
 
+function startApp() {
+    Auth.getInstance().checkAuth(initUI);
+}
+
 // Init after DOM ready (supports file:// open)
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initUI);
+    document.addEventListener('DOMContentLoaded', startApp);
 } else {
-    initUI();
+    startApp();
 }
 
 // -----------------------------
@@ -2398,4 +2424,110 @@ function renderFreeDVForm(info?: Partial<FreeDVInfo>) {
             if (!saveBtn.disabled) updateSaveAvailability();
         }
     };
+}
+
+function renderUsersForm(data: { users: { username: string, is_admin: boolean }[] }) {
+    const body = byId<HTMLElement>('content-body');
+    body.innerHTML = '';
+
+    const form = document.createElement('div');
+    form.className = 'form';
+
+    const secList = document.createElement('div');
+    secList.className = 'form-section';
+    secList.innerHTML = `<div class="form-title">${t('user_management')}</div>`;
+    
+    const users = (data && data.users) || [];
+
+    const table = document.createElement('table');
+    table.className = 'users-table';
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr>
+            <th>${t('username')}</th>
+            <th style="text-align:center">${t('is_admin')}</th>
+            <th style="text-align:right"></th>
+        </tr>
+    `;
+    table.appendChild(thead);
+    
+    const tbody = document.createElement('tbody');
+    users.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${u.username}</td>
+            <td style="text-align:center">${u.is_admin ? '✅' : ''}</td>
+            <td style="text-align:right">
+                ${u.username !== Auth.getInstance().getCurrentUser() ? `<button class="btn btn-sm danger del-user" data-username="${u.username}">${t('delete')}</button>` : ''}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    secList.appendChild(table);
+
+    // Форма добавления
+    const secAdd = document.createElement('div');
+    secAdd.className = 'form-section';
+    secAdd.innerHTML = `<div class="form-title">${t('add_user')}</div>`;
+    
+    const grid = document.createElement('div');
+    grid.className = 'form-grid';
+    
+    const labName = document.createElement('label');
+    labName.textContent = t('username');
+    const inpName = document.createElement('input');
+    inpName.type = 'text';
+    
+    const labPass = document.createElement('label');
+    labPass.textContent = t('password_label');
+    const inpPass = document.createElement('input');
+    inpPass.type = 'password';
+    
+    const btnAdd = document.createElement('button');
+    btnAdd.className = 'btn primary';
+    btnAdd.textContent = t('add');
+    
+    grid.appendChild(labName);
+    grid.appendChild(inpName);
+    grid.appendChild(labPass);
+    grid.appendChild(inpPass);
+    grid.appendChild(document.createElement('div'));
+    grid.appendChild(btnAdd);
+    
+    secAdd.appendChild(grid);
+    form.appendChild(secList);
+    form.appendChild(secAdd);
+    body.appendChild(form);
+
+    // Listeners
+    btnAdd.addEventListener('click', async () => {
+        const username = inpName.value;
+        const password = inpPass.value;
+        if (!username || !password) return;
+        try {
+            setStatus('busy', '');
+            await API.postForm('/auth/register', { username, password });
+            showToast('ok', t('saved'));
+            loadSectionData('users'); // Refresh
+        } catch (e: any) {
+            setStatus('error', e.message);
+        }
+    });
+
+    tbody.querySelectorAll('.del-user').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const username = (btn as HTMLElement).getAttribute('data-username');
+            if (!username) return;
+            if (!confirm(`Delete user ${username}?`)) return;
+            try {
+                setStatus('busy', '');
+                await API.postForm('/auth/delete', { username });
+                showToast('ok', t('saved'));
+                loadSectionData('users'); // Refresh
+            } catch (e: any) {
+                setStatus('error', e.message);
+            }
+        });
+    });
 }
