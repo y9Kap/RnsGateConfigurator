@@ -668,9 +668,21 @@ function renderInterfacesForm() {
     });
     selType.addEventListener('change', () => {
         const arr = ifLoadAll();
+        const newType = selType.value as InterfaceType;
+
+        // Проверка на дубликаты для loraspi и freedv
+        if (newType === 'loraspi' || newType === 'freedv') {
+            const exists = arr.some(i => i.id !== cur.id && i.type === newType);
+            if (exists) {
+                showToast('error', t('error_duplicate_iface'));
+                selType.value = cur.type; // Возвращаем назад
+                return;
+            }
+        }
+
         const item = arr.find(i => i.id === cur.id);
         if (!item) return;
-        item.type = selType.value as InterfaceType;
+        item.type = newType;
         item.settings = buildDefaultsForType(item.type);
         ifSaveAll(arr);
         // Обновим текст опции в списке интерфейсов

@@ -125,6 +125,7 @@ export const translations: Record<Lang, Record<string, string>> = {
         'label_tx_en_chip': 'TX EN Chip',
         'label_tx_en_pin': 'TX EN Pin',
         'label_tx_power': 'Мощность (dBm)',
+        'error_duplicate_iface': 'Интерфейс такого типа уже существует',
     },
     en: {
         'app_title': 'RNS Gate — Configurator',
@@ -244,6 +245,7 @@ export const translations: Record<Lang, Record<string, string>> = {
         'label_tx_en_chip': 'TX EN Chip',
         'label_tx_en_pin': 'TX EN Pin',
         'label_tx_power': 'TX Power (dBm)',
+        'error_duplicate_iface': 'Interface of this type already exists',
     }
 };
 
