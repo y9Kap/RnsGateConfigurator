@@ -1803,6 +1803,14 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
       </div>
     </div>
 
+    <div class="form-section">
+      <div class="form-title">${t('network_status')}</div>
+      <div class="status-container">
+        <pre id="wifi-status-text" class="code-small">${t('requesting')}</pre>
+        <button id="wifi-status-refresh" type="button" class="btn btn-sm">${t('refresh_status')}</button>
+      </div>
+    </div>
+
     <div class="form-actions">
       <div id="wifi-hint" class="hint"></div>
     </div>
@@ -1833,6 +1841,27 @@ function renderWifiForm(info?: Partial<WifiInfo>) {
     };
     ipcfg.addEventListener('change', toggleStatic);
     toggleStatic();
+
+    const refreshStatus = async () => {
+        const statusText = document.getElementById('wifi-status-text');
+        const refreshBtn = document.getElementById('wifi-status-refresh') as HTMLButtonElement | null;
+        if (!statusText) return;
+
+        statusText.textContent = t('requesting');
+        if (refreshBtn) refreshBtn.disabled = true;
+
+        try {
+            const res = await API.get('/wifi/status');
+            statusText.textContent = typeof res === 'string' ? res : JSON.stringify(res, null, 2);
+        } catch (e: any) {
+            statusText.textContent = `${t('error')}: ${e?.message || e}`;
+        } finally {
+            if (refreshBtn) refreshBtn.disabled = false;
+        }
+    };
+
+    byId('wifi-status-refresh').addEventListener('click', refreshStatus);
+    refreshStatus();
 
     // Применить режим автозаполнения
     const afMode = getAutoFillMode();

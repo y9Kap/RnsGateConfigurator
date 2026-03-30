@@ -7,7 +7,7 @@
 ## Возможности
 - Разделы: RNSD, FreeDV (сырой вывод), WiFi и Ethernet (формы).
 - Примечание: секция LoraSPI больше не поддерживается и удалена из кода.
-- WiFi: режимы client/AP, загрузка через GET /cgi-bin/wifi/info, сохранение через POST /cgi-bin/wifi/apply, DHCP/Static, локальные подсказки и профиль (localStorage: profile_wifi).
+- WiFi: режимы client/AP, загрузка через GET /cgi-bin/wifi/info, сохранение через POST /cgi-bin/wifi/apply, DHCP/Static, локальные подсказки и профиль (localStorage: profile_wifi). Добавлен просмотр текущего состояния сети (аналог `wpa_cli status`) через /wifi/status.
 - Ethernet: загрузка через GET /cgi-bin/ethernet/info, сохранение через POST /cgi-bin/ethernet/apply, DHCP/Static, локальные подсказки и профиль (localStorage: profile_ethernet).
 - Статус‑бар сети: online, offline, busy, error, мягкие переключения цвета; центрированное сообщение в шапке.
 - Оффлайн‑режим: UI доступен при открытии file:// и при отсутствии сети; формы WiFi/Ethernet рендерятся с дефолтами без запросов.

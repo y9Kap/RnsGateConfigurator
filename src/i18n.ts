@@ -65,6 +65,8 @@ export const translations: Record<Lang, Record<string, string>> = {
         'no_interfaces_added': 'Интерфейсы не добавлены. Нажмите «Добавить».',
         'ssid': 'Имя сети',
         'password': 'Пароль (WPA2)',
+        'network_status': 'Состояние сети',
+        'refresh_status': 'Обновить статус',
 
         'address_mode': 'Режим адресации',
         'static': 'Статический',
@@ -185,6 +187,8 @@ export const translations: Record<Lang, Record<string, string>> = {
         'no_interfaces_added': 'No interfaces added. Click "Add".',
         'ssid': 'Network name (SSID)',
         'password': 'Password (WPA2)',
+        'network_status': 'Network status',
+        'refresh_status': 'Refresh status',
 
         'address_mode': 'Address mode',
         'static': 'Static',
