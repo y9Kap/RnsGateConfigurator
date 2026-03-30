@@ -732,6 +732,32 @@ function renderInterfacesForm() {
             const defaults: Record<string, any> = {};
             tdef.fields.forEach(f => { defaults[f.key] = f.default; });
 
+            // Отрисовываем сначала радио-параметры (Frequency, Bandwidth и др.)
+            const tableFieldKeys = [
+                'spi_chip', 'spi_pin',
+                'irq_chip', 'irq_pin',
+                'busy_chip', 'busy_pin',
+                'nrst_chip', 'nrst_pin',
+                'txen_chip', 'txen_pin',
+                'rxen_chip', 'rxen_pin'
+            ];
+            const tableKeys = new Set<string>(tableFieldKeys);
+            const remainingFields = tdef.fields.filter(f => !tableKeys.has(f.key));
+
+            if (remainingFields.length > 0) {
+                const grid = document.createElement('div');
+                grid.className = 'form-grid';
+                container.appendChild(grid);
+                remainingFields.forEach(f => renderField(f, grid, item, itemId));
+            }
+
+            // Теперь создаем сворачиваемую секцию для пинов
+            const details = document.createElement('details');
+            details.className = 'settings-collapsible';
+            const summary = document.createElement('summary');
+            summary.textContent = t('label_loraspi_conn_settings');
+            details.appendChild(summary);
+
             const table = document.createElement('div');
             table.className = 'gpio-table';
 
@@ -823,20 +849,8 @@ function renderInterfacesForm() {
                 table.appendChild(pinInp);
             });
 
-            container.appendChild(table);
-
-            // Отрисовываем остальные поля (радио-параметры), которые не вошли в таблицу
-            const tableKeys = new Set<string>();
-            rows.forEach(r => { tableKeys.add(r.chipKey); tableKeys.add(r.pinKey); });
-
-            const remainingFields = tdef.fields.filter(f => !tableKeys.has(f.key));
-            if (remainingFields.length > 0) {
-                const grid = document.createElement('div');
-                grid.className = 'form-grid';
-                grid.style.marginTop = '20px';
-                container.appendChild(grid);
-                remainingFields.forEach(f => renderField(f, grid, item, itemId));
-            }
+            details.appendChild(table);
+            container.appendChild(details);
             return;
         }
 
